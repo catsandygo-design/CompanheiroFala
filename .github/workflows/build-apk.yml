@@ -12,6 +12,12 @@ concurrency:
   group: companion-release-main
   cancel-in-progress: true
 
+env:
+  SIGNING_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+  SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+  SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+  SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,32 +36,43 @@ jobs:
         with:
           gradle-version: "8.13"
 
-      - name: Restore prototype signing key
+      - name: Build debug APK for testing
+        run: gradle :app:assembleDebug
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CompanheiroFala-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Restore secure signing key
+        if: env.SIGNING_KEYSTORE_BASE64 != ''
         run: |
-          base64 -d .github/prototype-signing-keystore.b64 > "$RUNNER_TEMP/companheiro-dev.jks"
+          echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/companheiro-release.jks"
 
       - name: Build signed release APK
+        if: env.SIGNING_KEYSTORE_BASE64 != ''
         env:
-          SIGNING_STORE_FILE: ${{ runner.temp }}/companheiro-dev.jks
-          SIGNING_STORE_PASSWORD: companheiro123
-          SIGNING_KEY_ALIAS: companheiro
-          SIGNING_KEY_PASSWORD: companheiro123
+          SIGNING_STORE_FILE: ${{ runner.temp }}/companheiro-release.jks
         run: gradle :app:assembleRelease
 
-      - name: Prepare APK
+      - name: Prepare signed APK
+        if: env.SIGNING_KEYSTORE_BASE64 != ''
         run: cp app/build/outputs/apk/release/app-release.apk CompanheiroFala.apk
 
-      - name: Upload APK artifact
+      - name: Upload signed APK artifact
+        if: env.SIGNING_KEYSTORE_BASE64 != ''
         uses: actions/upload-artifact@v4
         with:
           name: CompanheiroFala-release
           path: CompanheiroFala.apk
 
-      - name: Publish GitHub Release
+      - name: Publish GitHub Release for in-app updates
+        if: env.SIGNING_KEYSTORE_BASE64 != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed -E 's/.*"([0-9.]+)".*/\1/')
           TAG="v$VERSION"
           gh release delete "$TAG" -y --cleanup-tag || true
-          gh release create "$TAG" CompanheiroFala.apk --title "Companheiro Fala $TAG" --notes "Atualização automática do Companheiro Fala. APK assinado para testes."
+          gh release create "$TAG" CompanheiroFala.apk --title "Companheiro Fala $TAG" --notes "Atualização automática do Companheiro Fala."
