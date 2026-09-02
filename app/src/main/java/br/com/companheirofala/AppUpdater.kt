@@ -8,11 +8,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.provider.Settings
-import androidx.core.content.FileProvider
 import org.json.JSONObject
-import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
@@ -20,6 +17,7 @@ import kotlin.concurrent.thread
 class AppUpdater(private val activity: Activity) {
     private val apiUrl = "https://api.github.com/repos/catsandygo-design/CompanheiroFala/releases/latest"
     private var downloadId = -1L
+    private var pendingInstallUri: Uri? = null
 
     fun checkAndUpdate(onStatus: (String) -> Unit) {
         thread {
@@ -50,8 +48,16 @@ class AppUpdater(private val activity: Activity) {
                     }
                 }
             } catch (_: Exception) {
-                // Atualização nunca deve impedir o app de funcionar offline.
+                // O app continua funcionando normalmente quando estiver offline.
             }
+        }
+    }
+
+    fun onResume() {
+        val uri = pendingInstallUri ?: return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || activity.packageManager.canRequestPackageInstalls()) {
+            pendingInstallUri = null
+            launchInstaller(uri)
         }
     }
 
@@ -69,15 +75,11 @@ class AppUpdater(private val activity: Activity) {
     }
 
     private fun downloadAndInstall(url: String, version: String, onStatus: (String) -> Unit) {
-        val fileName = "CompanheiroFala-$version.apk"
-        val destination = File(activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
-        if (destination.exists()) destination.delete()
-
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle("Atualizando Companheiro Fala")
             .setDescription("Baixando versão $version")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationUri(Uri.fromFile(destination))
+            .setDestinationInExternalFilesDir(activity, "updates", "CompanheiroFala-$version.apk")
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(false)
 
@@ -88,8 +90,9 @@ class AppUpdater(private val activity: Activity) {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) != downloadId) return
                 try { activity.unregisterReceiver(this) } catch (_: Exception) {}
+                val uri = manager.getUriForDownloadedFile(downloadId) ?: return
                 activity.runOnUiThread { onStatus("Atualização pronta. Confirme a instalação.") }
-                install(destination)
+                install(uri)
             }
         }
         val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
@@ -97,13 +100,16 @@ class AppUpdater(private val activity: Activity) {
         else @Suppress("DEPRECATION") activity.registerReceiver(receiver, filter)
     }
 
-    private fun install(apk: File) {
+    private fun install(uri: Uri) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) {
-            val settings = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}"))
-            activity.startActivity(settings)
+            pendingInstallUri = uri
+            activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}")))
             return
         }
-        val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", apk)
+        launchInstaller(uri)
+    }
+
+    private fun launchInstaller(uri: Uri) {
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
