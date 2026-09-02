@@ -4,6 +4,7 @@ import java.util.Locale
 import kotlin.random.Random
 
 enum class PlayMode { HOME, FEELINGS, LETTERS, ROUTINE }
+private enum class EmotionalStage { NONE, WAITING_REASON, WAITING_INJURY }
 
 data class ConversationReply(
     val text: String,
@@ -19,9 +20,13 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     private var mode = PlayMode.HOME
     private var routineStep = ""
     private var lastPrompt = ""
+    private var emotionalStage = EmotionalStage.NONE
+    private var currentEmotion: String? = null
+    private var currentEmotionScene = VisualScene.FEELINGS
 
     fun start(mode: PlayMode = PlayMode.HOME): ConversationReply {
         this.mode = mode
+        emotionalStage = EmotionalStage.NONE
         return when (mode) {
             PlayMode.HOME, PlayMode.FEELINGS -> feelingsQuestion()
             PlayMode.LETTERS -> letterQuestion()
@@ -37,6 +42,9 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     fun reply(raw: String): ConversationReply {
         val text = normalize(raw)
         if (text.isBlank()) return repeatRequest()
+
+        if (emotionalStage != EmotionalStage.NONE) return emotionalFollowUp(text)
+
         return when {
             containsAny(text, "triste", "chateada") -> feeling("TRISTE")
             containsAny(text, "feliz", "bem", "contente") -> feeling("FELIZ")
@@ -57,9 +65,11 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
                 ConversationReply("Quer ir fazer xixi?", RobotMood.CURIOUS, scene = VisualScene.TOILET, choices = listOf("SIM", "NÃO"))
             }
             else -> ConversationReply(
-                varied("Eu ouvi você. O que você quer fazer agora?", "Entendi. Quer brincar, falar das emoções ou fazer uma atividade?", "Legal. O que você escolhe agora?"),
+                varied("Eu ouvi você. Quer me contar mais?", "Entendi. Continua, eu estou ouvindo.", "Tá bom. Me conta mais um pouquinho."),
                 mood = RobotMood.CURIOUS,
-                choices = listOf("CARINHAS", "ABC", "ROTINA")
+                keepListening = true,
+                scene = VisualScene.FEELINGS,
+                choices = listOf("CONVERSAR", "ABC", "ROTINA")
             )
         }
     }
@@ -70,7 +80,8 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
         if (c == "CARINHAS") return start(PlayMode.FEELINGS)
         if (c == "ABC" || c == "DE NOVO") return start(PlayMode.LETTERS)
         if (c == "ROTINA") { routineStep = "comida"; return start(PlayMode.ROUTINE) }
-        if (c == "BRINCAR") return ConversationReply("Escolhe uma brincadeira.", RobotMood.CURIOUS, choices = listOf("CARINHAS", "ABC", "ROTINA"))
+        if (c == "BRINCAR") { emotionalStage = EmotionalStage.NONE; return ConversationReply("Escolhe uma brincadeira.", RobotMood.CURIOUS, scene = VisualScene.FEELINGS, choices = listOf("CARINHAS", "ABC", "ROTINA")) }
+        if (c == "CONVERSAR") return ConversationReply("Pode falar. Eu estou ouvindo você.", RobotMood.LISTENING, keepListening = true, scene = currentEmotionScene)
         if (mode == PlayMode.LETTERS && c in setOf("A","C","P")) return letterChoice(c)
         if (mode == PlayMode.ROUTINE) return routineChoice(c)
         return reply(c)
@@ -78,6 +89,8 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
 
     private fun feelingsQuestion(): ConversationReply {
         mode = PlayMode.FEELINGS
+        currentEmotion = null
+        currentEmotionScene = VisualScene.FEELINGS
         return ConversationReply(
             "Oi, ${profile.name}! Como você está se sentindo agora? Escolhe uma carinha.",
             mood = RobotMood.CURIOUS,
@@ -88,22 +101,67 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
 
     private fun feeling(value: String): ConversationReply {
         mode = PlayMode.FEELINGS
+        currentEmotion = value
+        emotionalStage = EmotionalStage.WAITING_REASON
         return when (value) {
-            "FELIZ" -> emotionalReply("Que bom! O que deixou você feliz?", RobotMood.HAPPY, VisualScene.HAPPY_FACE, true)
-            "TRISTE" -> emotionalReply("Entendi. Você está triste. Quer me contar o que aconteceu?", RobotMood.SAD, VisualScene.SAD_FACE, true, "${profile.name} marcou que está triste.")
-            "BRAVA" -> emotionalReply("Entendi. Você está brava. Quer me contar o que aconteceu?", RobotMood.CONFUSED, VisualScene.ANGRY_FACE, true, "${profile.name} marcou que está brava.")
-            "MEDO" -> emotionalReply("Entendi. Você está com medo. Quer me contar do que está com medo?", RobotMood.SAD, VisualScene.SCARED_FACE, true, "${profile.name} marcou que está com medo.")
-            "CANSADA" -> emotionalReply("Você está cansada. Quer descansar um pouquinho ou me contar como foi seu dia?", RobotMood.CURIOUS, VisualScene.TIRED_FACE, true)
-            else -> emotionalReply("Você está animada! O que aconteceu de legal?", RobotMood.SURPRISED, VisualScene.EXCITED_FACE, true)
+            "FELIZ" -> emotionalReply("Que bom! O que deixou você feliz?", RobotMood.HAPPY, VisualScene.HAPPY_FACE, null)
+            "TRISTE" -> emotionalReply("Entendi. Você está triste. O que aconteceu? Pode me contar.", RobotMood.SAD, VisualScene.SAD_FACE, "${profile.name} marcou que está triste.")
+            "BRAVA" -> emotionalReply("Entendi. Você está brava. O que aconteceu?", RobotMood.CONFUSED, VisualScene.ANGRY_FACE, "${profile.name} marcou que está brava.")
+            "MEDO" -> emotionalReply("Entendi. Você está com medo. O que aconteceu?", RobotMood.SAD, VisualScene.SCARED_FACE, "${profile.name} marcou que está com medo.")
+            "CANSADA" -> emotionalReply("Você está cansada. Me conta como foi seu dia.", RobotMood.CURIOUS, VisualScene.TIRED_FACE, null)
+            else -> emotionalReply("Você está animada! O que aconteceu de legal?", RobotMood.SURPRISED, VisualScene.EXCITED_FACE, null)
         }
     }
 
-    private fun emotionalReply(text: String, mood: RobotMood, scene: VisualScene, listen: Boolean, alert: String? = null) = ConversationReply(
-        text = text, mood = mood, keepListening = listen, scene = scene,
-        choices = listOf("CONVERSAR", "BRINCAR"), parentAlert = alert
-    )
+    private fun emotionalReply(text: String, mood: RobotMood, scene: VisualScene, alert: String?) : ConversationReply {
+        currentEmotionScene = scene
+        return ConversationReply(text, mood, keepListening = true, scene = scene, choices = listOf("CONVERSAR", "BRINCAR"), parentAlert = alert)
+    }
+
+    private fun emotionalFollowUp(text: String): ConversationReply {
+        val emotion = currentEmotion ?: ""
+
+        if (emotionalStage == EmotionalStage.WAITING_INJURY) {
+            emotionalStage = EmotionalStage.NONE
+            return if (isYes(text) || containsAny(text, "doeu", "machuquei", "machucou", "sangue")) {
+                ConversationReply(
+                    "Poxa. Chama a Lety ou a Alice para olhar onde machucou, tá? Depois você pode voltar e me contar.",
+                    RobotMood.SAD,
+                    scene = currentEmotionScene,
+                    choices = listOf("OK", "CONVERSAR"),
+                    parentAlert = "${profile.name} disse que caiu e indicou que se machucou."
+                )
+            } else {
+                ConversationReply("Que bom que você não se machucou. Quer me contar como você caiu?", RobotMood.CURIOUS, keepListening = true, scene = currentEmotionScene, choices = listOf("CONVERSAR", "BRINCAR"))
+            }
+        }
+
+        if (containsAny(text, "caí", "cai", "caí", "cair", "tropecei", "escorreguei")) {
+            emotionalStage = EmotionalStage.WAITING_INJURY
+            return ConversationReply(
+                "Poxa, você caiu. Você se machucou?",
+                RobotMood.SAD,
+                keepListening = true,
+                scene = currentEmotionScene,
+                choices = listOf("SIM", "NÃO"),
+                parentAlert = "${profile.name} contou que caiu durante uma conversa sobre como estava se sentindo."
+            )
+        }
+
+        emotionalStage = EmotionalStage.NONE
+        val response = when (emotion) {
+            "TRISTE" -> "Entendi. Obrigada por me contar. Isso deixou você triste. Quer me contar mais ou quer ficar um pouquinho comigo?"
+            "BRAVA" -> "Entendi. Isso deixou você brava. Quer me contar mais um pouquinho?"
+            "MEDO" -> "Entendi. Obrigada por me contar. Você quer chamar a Lety ou a Alice para ficar pertinho de você?"
+            "FELIZ" -> "Que legal! Gostei de saber. Quer me contar mais?"
+            "CANSADA" -> "Entendi. Parece que seu dia foi cansativo. Quer descansar um pouquinho?"
+            else -> "Que legal! Me conta mais, eu quero ouvir."
+        }
+        return ConversationReply(response, RobotMood.CURIOUS, keepListening = true, scene = currentEmotionScene, choices = listOf("CONVERSAR", "BRINCAR"))
+    }
 
     private fun letterQuestion(): ConversationReply {
+        emotionalStage = EmotionalStage.NONE
         mode = PlayMode.LETTERS
         return ConversationReply(
             "Olha, ${profile.name}. Esse é um cavalo. Caa-va-lo. Com qual letra começa cavalo?",
@@ -114,11 +172,8 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     }
 
     private fun letterChoice(choice: String): ConversationReply {
-        return if (choice == "C") {
-            ConversationReply("${praise()} C de cavalo!", RobotMood.PROUD, scene = VisualScene.HORSE, choices = listOf("DE NOVO", "BRINCAR"))
-        } else {
-            ConversationReply("Quase. Cavalo começa com C. C de cavalo. Tenta tocar no C.", RobotMood.CURIOUS, scene = VisualScene.HORSE, choices = listOf("A", "C", "P"))
-        }
+        return if (choice == "C") ConversationReply("${praise()} C de cavalo!", RobotMood.PROUD, scene = VisualScene.HORSE, choices = listOf("DE NOVO", "BRINCAR"))
+        else ConversationReply("Quase. Cavalo começa com C. C de cavalo. Tenta tocar no C.", RobotMood.CURIOUS, scene = VisualScene.HORSE, choices = listOf("A", "C", "P"))
     }
 
     private fun routineChoice(c: String): ConversationReply = when (routineStep) {
@@ -136,7 +191,7 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
             ConversationReply("Pode deixar o celular aqui e ir fazer xixi. Eu espero você voltar.", scene = VisualScene.TOILET, waitForMovement = true)
         } else ConversationReply("Tudo bem. Quando der vontade, pode me avisar.", choices = listOf("BRINCAR"))
         "maos" -> if (isYes(c)) ConversationReply("Boa! Mãozinha limpa. Agora podemos brincar.", RobotMood.PROUD, scene = VisualScene.HANDS, choices = listOf("ABC", "BRINCAR")) else onHandsNotWashed()
-        else -> ConversationReply("Vamos escolher outra coisa?", choices = listOf("CARINHAS", "ABC", "ROTINA"))
+        else -> ConversationReply("Vamos escolher outra coisa?", scene = VisualScene.FEELINGS, choices = listOf("CARINHAS", "ABC", "ROTINA"))
     }
 
     fun onMovementDetected(): ConversationReply {
@@ -152,12 +207,13 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     private fun repeatRequest(): ConversationReply {
         val prompt = varied("Não consegui entender. Pode falar de novo?", "Pode repetir para mim?", "Eu não ouvi direitinho. Fala mais uma vez?")
         lastPrompt = prompt
-        return ConversationReply(prompt, RobotMood.CURIOUS, keepListening = true)
+        return ConversationReply(prompt, RobotMood.CURIOUS, keepListening = true, scene = currentEmotionScene)
     }
     private fun praise() = varied("Isso!", "Muito bem!", "Você conseguiu!", "Boa!", "Acertou!", "Que legal!")
     private fun varied(vararg values: String): String {
         val options = values.filter { it != lastPrompt }
-        val result = (if (options.isNotEmpty()) options else values.toList())[Random.nextInt(if (options.isNotEmpty()) options.size else values.size)]
+        val pool = if (options.isNotEmpty()) options else values.toList()
+        val result = pool[Random.nextInt(pool.size)]
         lastPrompt = result
         return result
     }
