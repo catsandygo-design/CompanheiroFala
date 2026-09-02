@@ -1,194 +1,130 @@
 package br.com.companheirofala
 
 import java.util.Locale
-import kotlin.random.Random
 
-enum class PlayMode { CHAT, ANIMALS, COLORS, STORY, GUESS }
+enum class PlayMode { CHAT, LETTERS, ROUTINE }
 
 data class ConversationReply(
     val text: String,
     val mood: RobotMood = RobotMood.HAPPY,
-    val keepListening: Boolean = true
+    val keepListening: Boolean = true,
+    val scene: VisualScene = VisualScene.NONE,
+    val choices: List<String> = emptyList(),
+    val waitForMovement: Boolean = false
 )
 
 class ConversationEngine {
-    private var childName: String? = null
+    private var childName = "Gabi"
     private var mode = PlayMode.CHAT
-    private var lastTopic: String? = null
-    private var storyStep = 0
-    private var guessAnswer: String? = null
-    private var turns = 0
+    private var routineStep = ""
+    private var letterAnswer = "A"
 
     fun start(mode: PlayMode): ConversationReply {
         this.mode = mode
         return when (mode) {
-            PlayMode.CHAT -> ConversationReply("Vamos conversar. Me conta uma coisa legal que aconteceu hoje.", RobotMood.LISTENING)
-            PlayMode.ANIMALS -> ConversationReply("Vamos brincar de animais! Qual animal você mais gosta?", RobotMood.HAPPY)
-            PlayMode.COLORS -> ConversationReply("Brincadeira das cores! Olhe ao seu redor e me diga uma coisa que seja azul.", RobotMood.HAPPY)
-            PlayMode.STORY -> {
-                storyStep = 0
-                ConversationReply("Vamos inventar uma história juntos. Um robozinho encontrou uma caixa brilhante. O que tinha dentro dela?", RobotMood.THINKING)
-            }
-            PlayMode.GUESS -> newGuess()
+            PlayMode.CHAT -> ConversationReply("Oi, Gabi! Quer brincar comigo?", choices = listOf("SIM", "NÃO"))
+            PlayMode.LETTERS -> startLetterGame()
+            PlayMode.ROUTINE -> ConversationReply("Opa, Gabi! Você já comeu?", choices = listOf("SIM", "NÃO"))
         }
     }
 
     fun reply(raw: String): ConversationReply {
-        turns++
         val text = normalize(raw)
-        if (text.isBlank()) return ConversationReply("Não ouvi direitinho. Fala mais uma vez para mim?", RobotMood.CONFUSED)
+        if (text.contains("meu nome")) extractName(text)
+        if (mode == PlayMode.LETTERS) return letterReply(text)
+        if (mode == PlayMode.ROUTINE) return routineReply(text)
 
-        extractName(text)
-        val name = childName?.let { ", $it" }.orEmpty()
-
-        if (containsAny(text, "parar", "chega", "não quero brincar", "nao quero brincar")) {
-            mode = PlayMode.CHAT
-            return ConversationReply("Tudo bem$name. A gente pode só conversar. Sobre o que você quer falar?", RobotMood.LISTENING)
+        if (containsAny(text, "letra", "abc", "aprender")) return start(PlayMode.LETTERS)
+        if (containsAny(text, "comi", "almocei", "jantei", "lanchei")) {
+            mode = PlayMode.ROUTINE
+            routineStep = "ate"
+            return ConversationReply("Opa, $childName, você já comeu?", choices = listOf("SIM", "NÃO"))
         }
-
-        if (containsAny(text, "meu nome é", "meu nome e", "eu sou")) {
-            return ConversationReply("Que bom te conhecer$name! O que você gosta de fazer para se divertir?", RobotMood.HAPPY)
+        if (containsAny(text, "água", "agua", "sede")) {
+            routineStep = "agua"
+            return ConversationReply("Opa, $childName! Você quer água?", scene = VisualScene.WATER, choices = listOf("SIM", "NÃO"))
         }
-
-        return when (mode) {
-            PlayMode.ANIMALS -> animalReply(text, name)
-            PlayMode.COLORS -> colorReply(text, name)
-            PlayMode.STORY -> storyReply(text, name)
-            PlayMode.GUESS -> guessReply(text, name)
-            PlayMode.CHAT -> chatReply(text, name)
+        if (containsAny(text, "xixi", "banheiro")) {
+            routineStep = "xixi"
+            return ConversationReply("Quer ir fazer xixi?", scene = VisualScene.TOILET, choices = listOf("SIM", "NÃO"))
         }
+        if (containsAny(text, "cavalo")) {
+            return ConversationReply("Olha o cavalo! Agora aperta na letra A.", scene = VisualScene.HORSE, choices = listOf("A", "B", "C"))
+        }
+        if (isYes(text)) return ConversationReply("Que legal! Então vamos brincar. Você quer letras ou animais?", choices = listOf("ABC", "ANIMAIS"))
+        return ConversationReply("Entendi, $childName. Quer brincar de letras comigo?", choices = listOf("SIM", "NÃO"))
     }
 
-    private fun chatReply(text: String, name: String): ConversationReply {
-        if (containsAny(text, "oi", "olá", "ola", "bom dia", "boa tarde", "boa noite")) {
-            return ConversationReply("Oi$name! Que bom falar com você. Você quer conversar ou brincar de alguma coisa?", RobotMood.HAPPY)
+    fun onChoice(choice: String): ConversationReply {
+        val c = choice.uppercase(Locale("pt", "BR"))
+        if (c == "ABC") return start(PlayMode.LETTERS)
+        if (c == "ANIMAIS") {
+            mode = PlayMode.LETTERS
+            letterAnswer = "A"
+            return ConversationReply("Que animal é esse? Cavalo! Muito bem. Agora aperta na letra A.", scene = VisualScene.HORSE, choices = listOf("A","B","C"))
         }
-        if (containsAny(text, "triste", "chateado", "chateada", "bravo", "brava", "medo", "assustado", "assustada")) {
-            lastTopic = "sentimento"
-            return ConversationReply("Entendi$name. Quer me contar o que aconteceu? Eu vou te ouvir.", RobotMood.LISTENING)
-        }
-        if (containsAny(text, "feliz", "legal", "ótimo", "otimo", "divertido", "divertida", "ganhei", "consegui")) {
-            lastTopic = "feliz"
-            return ConversationReply("Que legal$name! Qual foi a melhor parte?", RobotMood.HAPPY)
-        }
-        if (containsAny(text, "escola", "aula", "professor", "professora", "colega", "amigo", "amiga")) {
-            lastTopic = "escola"
-            return ConversationReply("Quero saber mais. O que aconteceu na escola hoje?", RobotMood.LISTENING)
-        }
-        if (containsAny(text, "cachorro", "gato", "dinossauro", "unicórnio", "unicornio", "animal")) {
-            lastTopic = "animal"
-            return ConversationReply("Eu gosto desse assunto! O que você mais gosta nesse animal?", RobotMood.HAPPY)
-        }
-        if (containsAny(text, "história", "historia")) {
-            mode = PlayMode.STORY
-            return start(PlayMode.STORY)
-        }
-        if (containsAny(text, "adivinha", "adivinhar")) {
-            mode = PlayMode.GUESS
-            return start(PlayMode.GUESS)
-        }
-        if (containsAny(text, "cor", "azul", "verde", "vermelho", "amarelo", "rosa", "roxo")) {
-            lastTopic = "cor"
-            return ConversationReply("Bonita escolha! Qual outra coisa tem essa cor?", RobotMood.HAPPY)
-        }
-        if (containsAny(text, "não sei", "nao sei")) {
-            return ConversationReply("Tudo bem. Escolhe uma: animais, cores, história ou adivinhação?", RobotMood.THINKING)
-        }
-
-        return when (lastTopic) {
-            "sentimento" -> ConversationReply("Obrigado por me contar$name. O que ajudaria você a se sentir um pouquinho melhor agora?", RobotMood.LISTENING)
-            "feliz" -> ConversationReply("Gostei de ouvir isso$name. Você quer contar para alguém essa coisa boa?", RobotMood.HAPPY)
-            "escola" -> ConversationReply("E teve alguma parte fácil ou alguma parte difícil?", RobotMood.THINKING)
-            "animal" -> ConversationReply("Se esse animal pudesse falar, o que você acha que ele diria para você?", RobotMood.HAPPY)
-            "cor" -> ConversationReply("Agora procure uma coisa de outra cor e me diga qual encontrou!", RobotMood.HAPPY)
-            else -> {
-                val short = text.take(60)
-                val options = listOf(
-                    "Entendi$name. E o que aconteceu depois?",
-                    "Que interessante$name. Me conta mais um pedacinho disso.",
-                    "Eu estou acompanhando. Como você se sentiu quando isso aconteceu?",
-                    "Gostei de ouvir você. O que foi mais importante nessa história?",
-                    "Você me contou: $short. E depois, como terminou?"
-                )
-                ConversationReply(options.random(), RobotMood.LISTENING)
-            }
-        }
+        if (mode == PlayMode.LETTERS && c in listOf("A","B","C")) return letterChoice(c)
+        return reply(c)
     }
 
-    private fun animalReply(text: String, name: String): ConversationReply {
-        lastTopic = "animal"
-        return if (containsAny(text, "cachorro", "gato", "leão", "leao", "elefante", "dinossauro", "unicórnio", "unicornio", "tigre", "macaco", "girafa", "coelho")) {
-            val animal = text.split(" ").firstOrNull { it in setOf("cachorro","gato","leão","leao","elefante","dinossauro","unicórnio","unicornio","tigre","macaco","girafa","coelho") } ?: "esse animal"
-            ConversationReply("Boa$name! $animal é uma escolha divertida. Que som você acha que ele faz?", RobotMood.HAPPY)
+    private fun startLetterGame(): ConversationReply {
+        mode = PlayMode.LETTERS
+        letterAnswer = "A"
+        return ConversationReply("Gabi, olha o cavalo. Cavalo começa com qual letra? Aperta no A.", scene = VisualScene.HORSE, choices = listOf("A", "B", "C"))
+    }
+
+    private fun letterReply(text: String): ConversationReply {
+        val spoken = listOf("a","b","c").firstOrNull { text == it || text.contains("letra $it") }
+        return if (spoken != null) letterChoice(spoken.uppercase()) else ConversationReply("Olha as letras. Aperta no A.", scene = VisualScene.HORSE, choices = listOf("A","B","C"))
+    }
+
+    private fun letterChoice(choice: String): ConversationReply {
+        return if (choice == letterAnswer) {
+            letterAnswer = "B"
+            ConversationReply("Acertou! A de amor. Muito bem! Agora aperta no B.", RobotMood.HAPPY, scene = VisualScene.LETTER_A, choices = listOf("A","B","C"))
+        } else if (letterAnswer == "B" && choice == "B") {
+            letterAnswer = "C"
+            ConversationReply("Isso! B de bola. Agora vamos no C.", RobotMood.HAPPY, scene = VisualScene.LETTER_B, choices = listOf("A","B","C"))
+        } else if (letterAnswer == "C" && choice == "C") {
+            letterAnswer = "A"
+            ConversationReply("Muito bem! C de cavalo! Quer brincar de novo?", RobotMood.HAPPY, scene = VisualScene.HORSE, choices = listOf("SIM","NÃO"))
         } else {
-            ConversationReply("Gostei da sua resposta$name! Agora me diz: esse animal é grande ou pequeno?", RobotMood.LISTENING)
+            ConversationReply("Quase! Olha com calma. Aperta no $letterAnswer.", RobotMood.THINKING, scene = VisualScene.HORSE, choices = listOf("A","B","C"))
         }
     }
 
-    private fun colorReply(text: String, name: String): ConversationReply {
-        lastTopic = "cor"
-        val colors = listOf("azul", "verde", "vermelho", "amarelo", "rosa", "roxo", "laranja", "preto", "branco")
-        val found = colors.firstOrNull { text.contains(it) }
-        return if (found != null) {
-            ConversationReply("Muito bem$name! Você encontrou $found. Agora procure alguma coisa verde e me conte o que é.", RobotMood.HAPPY)
-        } else {
-            ConversationReply("Legal$name! E qual é a cor dessa coisa?", RobotMood.LISTENING)
+    private fun routineReply(text: String): ConversationReply {
+        return when (routineStep) {
+            "ate" -> if (isYes(text)) {
+                routineStep = "escovar"
+                ConversationReply("Então é hora de escovar os dentinhos!", scene = VisualScene.TOOTHBRUSH, choices = listOf("JÁ ESCOVEI", "VOU ESCOVAR"))
+            } else ConversationReply("Tudo bem. Quando comer, a gente lembra dos dentinhos.", choices = listOf("OK"))
+            "agua" -> if (isYes(text)) ConversationReply("Então pede para a Lety ou para a Alice te dar água.", scene = VisualScene.WATER) else ConversationReply("Tudo bem. Se der sede, me chama.")
+            "xixi" -> if (isYes(text)) {
+                routineStep = "voltando_xixi"
+                ConversationReply("Então deixa o celular na mesa e vai fazer xixi. Eu fico aqui esperando você voltar.", scene = VisualScene.TOILET, keepListening = false, waitForMovement = true)
+            } else ConversationReply("Tudo bem. Quando der vontade, não precisa segurar.")
+            "maos" -> if (isYes(text)) ConversationReply("Boa! Mãozinha limpa. Agora vamos brincar!", scene = VisualScene.HANDS, choices = listOf("ABC","ANIMAIS"))
+            else -> ConversationReply("Vamos continuar brincando!", choices = listOf("ABC","ANIMAIS"))
         }
     }
 
-    private fun storyReply(text: String, name: String): ConversationReply {
-        storyStep++
-        val short = text.take(55)
-        return when (storyStep % 4) {
-            1 -> ConversationReply("Uau$name! Então tinha $short. E de repente apareceu um barulho. Que barulho era?", RobotMood.THINKING)
-            2 -> ConversationReply("Gostei! O robozinho ficou curioso. Quem apareceu depois desse barulho?", RobotMood.HAPPY)
-            3 -> ConversationReply("Agora ficou emocionante! E o que eles fizeram juntos?", RobotMood.THINKING)
-            else -> ConversationReply("Que final legal$name! Quer continuar essa história ou começar outra?", RobotMood.HAPPY)
-        }
+    fun onMovementDetected(): ConversationReply {
+        routineStep = "maos"
+        return ConversationReply("Opa, Gabi! Você voltou. Lavou a mãozinha?", scene = VisualScene.HANDS, choices = listOf("SIM", "NÃO"))
     }
 
-    private fun newGuess(): ConversationReply {
-        val options = listOf(
-            "cachorro" to "Eu tenho quatro patas, gosto de brincar e posso fazer au-au. Quem sou eu?",
-            "gato" to "Eu tenho bigodes, gosto de subir e faço miau. Quem sou eu?",
-            "banana" to "Sou uma fruta amarela e tenho casca. Quem sou eu?",
-            "sol" to "Apareço no céu de dia e ilumino tudo. Quem sou eu?"
-        )
-        val choice = options[Random.nextInt(options.size)]
-        guessAnswer = choice.first
-        return ConversationReply(choice.second, RobotMood.THINKING)
+    fun onHandsNotWashed(): ConversationReply {
+        routineStep = "maos"
+        return ConversationReply("Então precisa lavar as mãozinhas. Senão as bactérias podem fazer dodói. Olha elas correndo!", scene = VisualScene.BACTERIA, choices = listOf("VOU LAVAR"))
     }
 
-    private fun guessReply(text: String, name: String): ConversationReply {
-        val answer = guessAnswer
-        if (answer != null && text.contains(answer)) {
-            val next = newGuess()
-            return ConversationReply("Acertou$name! Muito bem! Agora outra: ${next.text}", RobotMood.HAPPY)
-        }
-        return ConversationReply("Quase$name! Quer uma dica? Pense com calma e tenta mais uma vez.", RobotMood.THINKING)
-    }
-
-    private fun normalize(input: String): String = input
-        .lowercase(Locale("pt", "BR"))
-        .trim()
-        .replace("municornio", "unicórnio")
-        .replace("municórnio", "unicórnio")
-
+    private fun normalize(input: String) = input.lowercase(Locale("pt", "BR")).trim()
+    private fun isYes(text: String) = containsAny(text, "sim", "já", "ja", "quero", "uhum")
+    private fun containsAny(text: String, vararg terms: String) = terms.any { text.contains(it) }
     private fun extractName(text: String) {
-        val patterns = listOf("meu nome é ", "meu nome e ", "eu sou ")
-        for (pattern in patterns) {
-            val index = text.indexOf(pattern)
-            if (index >= 0) {
-                val candidate = text.substring(index + pattern.length)
-                    .split(" ")
-                    .take(2)
-                    .joinToString(" ")
-                    .trim()
-                if (candidate.length in 2..30) childName = candidate.replaceFirstChar { it.uppercase() }
-                return
-            }
-        }
+        val p = listOf("meu nome é ", "meu nome e ").firstOrNull { text.contains(it) } ?: return
+        val value = text.substringAfter(p).split(" ").firstOrNull().orEmpty()
+        if (value.length >= 2) childName = value.replaceFirstChar { it.uppercase() }
     }
-
-    private fun containsAny(text: String, vararg terms: String): Boolean = terms.any { text.contains(it) }
 }
