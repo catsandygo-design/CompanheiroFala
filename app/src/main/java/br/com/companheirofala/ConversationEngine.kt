@@ -41,10 +41,12 @@ class ConversationEngine {
             return ConversationReply("Opa, $childName, você já comeu?", choices = listOf("SIM", "NÃO"))
         }
         if (containsAny(text, "água", "agua", "sede")) {
+            mode = PlayMode.ROUTINE
             routineStep = "agua"
             return ConversationReply("Opa, $childName! Você quer água?", scene = VisualScene.WATER, choices = listOf("SIM", "NÃO"))
         }
         if (containsAny(text, "xixi", "banheiro")) {
+            mode = PlayMode.ROUTINE
             routineStep = "xixi"
             return ConversationReply("Quer ir fazer xixi?", scene = VisualScene.TOILET, choices = listOf("SIM", "NÃO"))
         }
@@ -75,21 +77,24 @@ class ConversationEngine {
 
     private fun letterReply(text: String): ConversationReply {
         val spoken = listOf("a","b","c").firstOrNull { text == it || text.contains("letra $it") }
-        return if (spoken != null) letterChoice(spoken.uppercase()) else ConversationReply("Olha as letras. Aperta no A.", scene = VisualScene.HORSE, choices = listOf("A","B","C"))
+        return if (spoken != null) letterChoice(spoken.uppercase()) else ConversationReply("Olha as letras. Aperta no $letterAnswer.", scene = VisualScene.HORSE, choices = listOf("A","B","C"))
     }
 
     private fun letterChoice(choice: String): ConversationReply {
-        return if (choice == letterAnswer) {
-            letterAnswer = "B"
-            ConversationReply("Acertou! A de amor. Muito bem! Agora aperta no B.", RobotMood.HAPPY, scene = VisualScene.LETTER_A, choices = listOf("A","B","C"))
-        } else if (letterAnswer == "B" && choice == "B") {
-            letterAnswer = "C"
-            ConversationReply("Isso! B de bola. Agora vamos no C.", RobotMood.HAPPY, scene = VisualScene.LETTER_B, choices = listOf("A","B","C"))
-        } else if (letterAnswer == "C" && choice == "C") {
-            letterAnswer = "A"
-            ConversationReply("Muito bem! C de cavalo! Quer brincar de novo?", RobotMood.HAPPY, scene = VisualScene.HORSE, choices = listOf("SIM","NÃO"))
-        } else {
-            ConversationReply("Quase! Olha com calma. Aperta no $letterAnswer.", RobotMood.THINKING, scene = VisualScene.HORSE, choices = listOf("A","B","C"))
+        return when (letterAnswer) {
+            "A" -> if (choice == "A") {
+                letterAnswer = "B"
+                ConversationReply("Acertou! A de amor. Muito bem! Agora aperta no B.", RobotMood.HAPPY, scene = VisualScene.LETTER_A, choices = listOf("A","B","C"))
+            } else ConversationReply("Quase! Olha com calma. Aperta no A.", RobotMood.THINKING, scene = VisualScene.HORSE, choices = listOf("A","B","C"))
+            "B" -> if (choice == "B") {
+                letterAnswer = "C"
+                ConversationReply("Isso! B de bola. Agora vamos no C.", RobotMood.HAPPY, scene = VisualScene.LETTER_B, choices = listOf("A","B","C"))
+            } else ConversationReply("Quase! Agora é a letra B.", RobotMood.THINKING, scene = VisualScene.LETTER_B, choices = listOf("A","B","C"))
+            "C" -> if (choice == "C") {
+                letterAnswer = "A"
+                ConversationReply("Muito bem! C de cavalo! Quer brincar de novo?", RobotMood.HAPPY, scene = VisualScene.HORSE, choices = listOf("SIM","NÃO"))
+            } else ConversationReply("Quase! Agora é a letra C.", RobotMood.THINKING, scene = VisualScene.LETTER_C, choices = listOf("A","B","C"))
+            else -> startLetterGame()
         }
     }
 
@@ -104,7 +109,11 @@ class ConversationEngine {
                 routineStep = "voltando_xixi"
                 ConversationReply("Então deixa o celular na mesa e vai fazer xixi. Eu fico aqui esperando você voltar.", scene = VisualScene.TOILET, keepListening = false, waitForMovement = true)
             } else ConversationReply("Tudo bem. Quando der vontade, não precisa segurar.")
-            "maos" -> if (isYes(text)) ConversationReply("Boa! Mãozinha limpa. Agora vamos brincar!", scene = VisualScene.HANDS, choices = listOf("ABC","ANIMAIS"))
+            "maos" -> if (isYes(text)) {
+                ConversationReply("Boa! Mãozinha limpa. Agora vamos brincar!", scene = VisualScene.HANDS, choices = listOf("ABC","ANIMAIS"))
+            } else {
+                onHandsNotWashed()
+            }
             else -> ConversationReply("Vamos continuar brincando!", choices = listOf("ABC","ANIMAIS"))
         }
     }
