@@ -47,13 +47,14 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(buildScreen())
+        updater = AppUpdater(this)
         tts = TextToSpeech(this, this)
+
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
             sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
-        setContentView(buildScreen())
-        updater = AppUpdater(this)
 
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_AUDIO)
@@ -63,9 +64,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
         renderReply(intro)
         speak(intro.text, false)
 
-        status.postDelayed({
-            updater.checkAndUpdate { message -> status.text = message }
-        }, 1200)
+        status.postDelayed({ updater.checkAndUpdate { message -> status.text = message } }, 1200)
     }
 
     override fun onResume() {
@@ -95,7 +94,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
 
         visual = ChildVisualView(this)
         root.addView(visual, LinearLayout.LayoutParams(-1, 0, 2.6f).apply {
-            topMargin = dp(4); bottomMargin = dp(6)
+            topMargin = dp(4)
+            bottomMargin = dp(6)
         })
 
         speechBubble = TextView(this).apply {
@@ -124,21 +124,26 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
         root.addView(status, LinearLayout.LayoutParams(-1, dp(28)))
 
         val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        bottom.addView(bigButton("FALAR", Color.rgb(57,118,255)) {
+
+        val talkParams = LinearLayout.LayoutParams(0, dp(60), 1.7f).apply { marginEnd = dp(6) }
+        bottom.addView(bigButton("FALAR", Color.rgb(57,118,255), talkParams) {
             continuousMode = true
             listen()
-        }, LinearLayout.LayoutParams(0, dp(60), 1.7f).apply { marginEnd = dp(6) }))
-        bottom.addView(bigButton("ABC", Color.rgb(124,83,230)) {
+        })
+
+        val abcParams = LinearLayout.LayoutParams(0, dp(60), 1f).apply { marginStart = dp(6) }
+        bottom.addView(bigButton("ABC", Color.rgb(124,83,230), abcParams) {
             continuousMode = true
             val r = engine.start(PlayMode.LETTERS)
-            renderReply(r); speak(r.text, true)
-        }, LinearLayout.LayoutParams(0, dp(60), 1f).apply { marginStart = dp(6) }))
-        root.addView(bottom, LinearLayout.LayoutParams(-1, dp(64)))
+            renderReply(r)
+            speak(r.text, true)
+        })
 
+        root.addView(bottom, LinearLayout.LayoutParams(-1, dp(64)))
         return root
     }
 
-    private fun bigButton(label: String, color: Int, action: () -> Unit, lp: LinearLayout.LayoutParams): Button {
+    private fun bigButton(label: String, color: Int, lp: LinearLayout.LayoutParams, action: () -> Unit): Button {
         return Button(this).apply {
             text = label
             textSize = 20f
@@ -178,9 +183,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
                 background = roundedBackground(color, 22f)
                 setOnClickListener {
                     var r = engine.onChoice(label)
-                    if (label == "NÃO" && speechBubble.text.toString().contains("Lavou", true)) {
-                        r = engine.onHandsNotWashed()
-                    }
+                    if (label == "NÃO" && speechBubble.text.toString().contains("Lavou", true)) r = engine.onHandsNotWashed()
                     continuousMode = true
                     renderReply(r)
                     speak(r.text, r.keepListening)
@@ -246,8 +249,10 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
     private fun configurePrincessVoice() {
         val locale = Locale("pt", "BR")
         val voices = tts?.voices.orEmpty().filter { it.locale.language == "pt" }
-        val chosen = voices.sortedWith(compareByDescending<android.speech.tts.Voice> { !it.isNetworkConnectionRequired }
-            .thenByDescending { it.quality }).firstOrNull()
+        val chosen = voices.sortedWith(
+            compareByDescending<android.speech.tts.Voice> { !it.isNetworkConnectionRequired }
+                .thenByDescending { it.quality }
+        ).firstOrNull()
         if (chosen != null) tts?.voice = chosen
         tts?.setLanguage(locale)
         tts?.setSpeechRate(0.82f)
@@ -294,8 +299,10 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
     }
 
     private fun roundedBackground(color: Int, radius: Float) = GradientDrawable().apply {
-        setColor(color); cornerRadius = dp(radius.toInt()).toFloat()
+        setColor(color)
+        cornerRadius = dp(radius.toInt()).toFloat()
     }
+
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
