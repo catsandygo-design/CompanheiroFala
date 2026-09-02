@@ -10,6 +10,8 @@ import android.os.Looper
 import android.util.AttributeSet
 import android.view.View
 import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
 enum class RobotMood { IDLE, LISTENING, THINKING, SPEAKING, HAPPY, CONFUSED }
@@ -24,34 +26,42 @@ class RobotFaceView @JvmOverloads constructor(
     private var mood = RobotMood.IDLE
     private var blink = false
     private var phase = 0f
+    private var voiceLevel = 0f
 
     private val animator = object : Runnable {
         override fun run() {
-            phase += 0.16f
+            phase += 0.13f
             invalidate()
-            handler.postDelayed(this, 50)
+            handler.postDelayed(this, 45)
         }
     }
 
     private val blinker = object : Runnable {
         override fun run() {
-            blink = true
-            invalidate()
-            handler.postDelayed({
-                blink = false
+            if (mood != RobotMood.LISTENING) {
+                blink = true
                 invalidate()
-            }, 130)
-            handler.postDelayed(this, 2400L + (Math.random() * 1800L).toLong())
+                handler.postDelayed({
+                    blink = false
+                    invalidate()
+                }, 120)
+            }
+            handler.postDelayed(this, 2200L + (Math.random() * 1800L).toLong())
         }
     }
 
     init {
         handler.post(animator)
-        handler.postDelayed(blinker, 1200)
+        handler.postDelayed(blinker, 1000)
     }
 
     fun setMood(newMood: RobotMood) {
         mood = newMood
+        invalidate()
+    }
+
+    fun setVoiceLevel(rmsDb: Float) {
+        voiceLevel = min(1f, max(0f, (rmsDb + 2f) / 12f))
         invalidate()
     }
 
@@ -68,89 +78,138 @@ class RobotFaceView @JvmOverloads constructor(
 
         val cx = w / 2f
         val cy = h / 2f
-        val bob = sin(phase.toDouble()).toFloat() * 4f
-        val face = RectF(w * .12f, h * .16f + bob, w * .88f, h * .84f + bob)
+        val bob = when (mood) {
+            RobotMood.SPEAKING -> sin((phase * 2).toDouble()).toFloat() * 5f
+            RobotMood.HAPPY -> sin(phase.toDouble()).toFloat() * 3f
+            else -> sin((phase * .55f).toDouble()).toFloat() * 2f
+        }
 
+        val glowColor = when (mood) {
+            RobotMood.LISTENING -> Color.rgb(53, 224, 255)
+            RobotMood.THINKING -> Color.rgb(165, 116, 255)
+            RobotMood.SPEAKING -> Color.rgb(74, 210, 255)
+            RobotMood.HAPPY -> Color.rgb(75, 244, 176)
+            RobotMood.CONFUSED -> Color.rgb(255, 184, 83)
+            RobotMood.IDLE -> Color.rgb(68, 153, 255)
+        }
+
+        val panel = RectF(w * .055f, h * .08f + bob, w * .945f, h * .92f + bob)
         paint.style = Paint.Style.FILL
-        paint.color = Color.rgb(18, 26, 45)
-        canvas.drawRoundRect(face, 52f, 52f, paint)
+        paint.color = Color.rgb(9, 18, 35)
+        canvas.drawRoundRect(panel, 72f, 72f, paint)
 
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 6f
-        paint.color = when (mood) {
-            RobotMood.LISTENING -> Color.rgb(75, 220, 255)
-            RobotMood.THINKING -> Color.rgb(160, 120, 255)
-            RobotMood.SPEAKING -> Color.rgb(63, 205, 255)
-            RobotMood.HAPPY -> Color.rgb(87, 240, 181)
-            RobotMood.CONFUSED -> Color.rgb(255, 190, 92)
-            RobotMood.IDLE -> Color.rgb(70, 160, 255)
-        }
-        canvas.drawRoundRect(face, 52f, 52f, paint)
-
-        val eyeY = cy - h * .07f + bob
-        val leftX = cx - w * .18f
-        val rightX = cx + w * .18f
-        drawEye(canvas, leftX, eyeY, true)
-        drawEye(canvas, rightX, eyeY, false)
-        drawMouth(canvas, cx, cy + h * .16f + bob)
+        paint.strokeWidth = 4f
+        paint.color = Color.argb(130, Color.red(glowColor), Color.green(glowColor), Color.blue(glowColor))
+        canvas.drawRoundRect(panel, 72f, 72f, paint)
 
         if (mood == RobotMood.LISTENING) {
+            val pulse = 7f + voiceLevel * 20f + (sin((phase * 2.2).toDouble()).toFloat() + 1f) * 3f
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 4f
-            paint.color = Color.argb(150, 75, 220, 255)
-            val pulse = 14f + (sin((phase * 2).toDouble()).toFloat() + 1f) * 8f
-            canvas.drawCircle(cx, cy, w * .42f + pulse, paint)
+            paint.strokeWidth = 3f + voiceLevel * 4f
+            paint.color = Color.argb(95, 53, 224, 255)
+            canvas.drawRoundRect(
+                RectF(panel.left - pulse, panel.top - pulse, panel.right + pulse, panel.bottom + pulse),
+                78f,
+                78f,
+                paint
+            )
+        }
+
+        val eyeY = cy - h * .045f + bob
+        val eyeSpread = w * .225f
+        val eyeScale = 1f + if (mood == RobotMood.LISTENING) voiceLevel * .12f else 0f
+
+        drawEye(canvas, cx - eyeSpread, eyeY, true, eyeScale, glowColor)
+        drawEye(canvas, cx + eyeSpread, eyeY, false, eyeScale, glowColor)
+        drawMouth(canvas, cx, cy + h * .20f + bob, glowColor)
+
+        if (mood == RobotMood.THINKING) {
+            paint.style = Paint.Style.FILL
+            paint.color = Color.argb(155, 181, 141, 255)
+            val dotY = panel.top + h * .13f
+            for (i in 0..2) {
+                val r = 5f + i * 2f
+                canvas.drawCircle(cx + w * .28f + i * 17f, dotY - i * 10f, r, paint)
+            }
         }
     }
 
-    private fun drawEye(canvas: Canvas, x: Float, y: Float, left: Boolean) {
-        paint.style = Paint.Style.FILL
-        paint.color = Color.rgb(95, 225, 255)
+    private fun drawEye(canvas: Canvas, x: Float, y: Float, left: Boolean, scale: Float, glowColor: Int) {
+        paint.color = glowColor
 
         if (blink) {
-            canvas.drawRoundRect(RectF(x - 42f, y - 4f, x + 42f, y + 5f), 8f, 8f, paint)
+            paint.style = Paint.Style.FILL
+            canvas.drawRoundRect(RectF(x - 52f, y - 5f, x + 52f, y + 6f), 10f, 10f, paint)
             return
         }
 
         when (mood) {
             RobotMood.HAPPY -> {
                 paint.style = Paint.Style.STROKE
-                paint.strokeWidth = 10f
-                val r = RectF(x - 38f, y - 12f, x + 38f, y + 52f)
-                canvas.drawArc(r, 200f, 140f, false, paint)
+                paint.strokeWidth = 13f
+                canvas.drawArc(RectF(x - 52f, y - 22f, x + 52f, y + 62f), 200f, 140f, false, paint)
             }
+
             RobotMood.CONFUSED -> {
-                val tilt = if (left) -10f else 10f
+                paint.style = Paint.Style.FILL
+                val tilt = if (left) -9f else 9f
                 canvas.save()
                 canvas.rotate(tilt, x, y)
-                canvas.drawRoundRect(RectF(x - 34f, y - 14f, x + 34f, y + 24f), 18f, 18f, paint)
+                canvas.drawRoundRect(RectF(x - 45f, y - 25f, x + 45f, y + 28f), 24f, 24f, paint)
                 canvas.restore()
             }
+
             RobotMood.THINKING -> {
-                val offset = cos(phase.toDouble()).toFloat() * 10f
-                canvas.drawCircle(x + offset, y, 24f, paint)
+                paint.style = Paint.Style.FILL
+                val offsetX = cos(phase.toDouble()).toFloat() * 14f
+                val offsetY = sin((phase * .7).toDouble()).toFloat() * 6f
+                canvas.drawOval(RectF(x - 39f + offsetX, y - 31f + offsetY, x + 39f + offsetX, y + 31f + offsetY), paint)
             }
+
             else -> {
-                val offset = if (mood == RobotMood.SPEAKING) sin((phase * 2).toDouble()).toFloat() * 5f else 0f
-                canvas.drawRoundRect(RectF(x - 31f, y - 24f + offset, x + 31f, y + 24f + offset), 22f, 22f, paint)
+                paint.style = Paint.Style.FILL
+                val talkBounce = if (mood == RobotMood.SPEAKING) sin((phase * 2.5).toDouble()).toFloat() * 5f else 0f
+                val halfW = 43f * scale
+                val halfH = 31f * scale
+                canvas.drawRoundRect(
+                    RectF(x - halfW, y - halfH + talkBounce, x + halfW, y + halfH + talkBounce),
+                    28f,
+                    28f,
+                    paint
+                )
+
+                if (mood == RobotMood.LISTENING) {
+                    paint.color = Color.rgb(8, 20, 36)
+                    val pupilShift = sin((phase * .45).toDouble()).toFloat() * 5f
+                    canvas.drawCircle(x + pupilShift, y, 10f + voiceLevel * 2f, paint)
+                }
             }
         }
     }
 
-    private fun drawMouth(canvas: Canvas, x: Float, y: Float) {
-        paint.color = Color.rgb(117, 225, 255)
-        paint.strokeWidth = 8f
+    private fun drawMouth(canvas: Canvas, x: Float, y: Float, glowColor: Int) {
+        paint.color = glowColor
+        paint.strokeWidth = 9f
         paint.style = Paint.Style.STROKE
+
         when (mood) {
-            RobotMood.HAPPY -> canvas.drawArc(RectF(x - 48f, y - 28f, x + 48f, y + 36f), 15f, 150f, false, paint)
+            RobotMood.HAPPY -> canvas.drawArc(RectF(x - 62f, y - 34f, x + 62f, y + 48f), 15f, 150f, false, paint)
             RobotMood.SPEAKING -> {
                 paint.style = Paint.Style.FILL
-                val open = 14f + (sin((phase * 3).toDouble()).toFloat() + 1f) * 10f
-                canvas.drawOval(RectF(x - 30f, y - open, x + 30f, y + open), paint)
+                val open = 16f + (sin((phase * 3.2).toDouble()).toFloat() + 1f) * 12f
+                canvas.drawOval(RectF(x - 35f, y - open, x + 35f, y + open), paint)
             }
-            RobotMood.CONFUSED -> canvas.drawLine(x - 28f, y + 6f, x + 28f, y - 6f, paint)
-            RobotMood.THINKING -> canvas.drawCircle(x + 5f, y, 10f, paint)
-            else -> canvas.drawArc(RectF(x - 38f, y - 12f, x + 38f, y + 28f), 20f, 140f, false, paint)
+            RobotMood.CONFUSED -> canvas.drawLine(x - 38f, y + 7f, x + 38f, y - 7f, paint)
+            RobotMood.THINKING -> {
+                paint.style = Paint.Style.FILL
+                canvas.drawCircle(x + 7f, y, 10f, paint)
+            }
+            RobotMood.LISTENING -> {
+                val smile = 8f + voiceLevel * 12f
+                canvas.drawArc(RectF(x - 46f, y - smile, x + 46f, y + 30f + smile), 22f, 136f, false, paint)
+            }
+            RobotMood.IDLE -> canvas.drawArc(RectF(x - 46f, y - 13f, x + 46f, y + 31f), 20f, 140f, false, paint)
         }
     }
 }
