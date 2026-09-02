@@ -5,25 +5,57 @@ on:
   push:
     branches: [ "main" ]
 
+permissions:
+  contents: write
+
+concurrency:
+  group: companion-release-main
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
-      - name: Build debug APK
-        run: gradle :app:assembleDebug
-      - name: Upload APK
+
+      - name: Restore prototype signing key
+        run: |
+          base64 -d .github/prototype-signing-keystore.b64 > "$RUNNER_TEMP/companheiro-dev.jks"
+
+      - name: Build signed release APK
+        env:
+          SIGNING_STORE_FILE: ${{ runner.temp }}/companheiro-dev.jks
+          SIGNING_STORE_PASSWORD: companheiro123
+          SIGNING_KEY_ALIAS: companheiro
+          SIGNING_KEY_PASSWORD: companheiro123
+        run: gradle :app:assembleRelease
+
+      - name: Prepare APK
+        run: cp app/build/outputs/apk/release/app-release.apk CompanheiroFala.apk
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CompanheiroFala-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: CompanheiroFala-release
+          path: CompanheiroFala.apk
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed -E 's/.*"([0-9.]+)".*/\1/')
+          TAG="v$VERSION"
+          gh release delete "$TAG" -y --cleanup-tag || true
+          gh release create "$TAG" CompanheiroFala.apk --title "Companheiro Fala $TAG" --notes "Atualização automática do Companheiro Fala. APK assinado para testes."
