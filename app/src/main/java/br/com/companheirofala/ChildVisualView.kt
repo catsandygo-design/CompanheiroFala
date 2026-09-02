@@ -1,124 +1,51 @@
 package br.com.companheirofala
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.RectF
+import android.graphics.*
 import android.util.AttributeSet
 import android.view.View
 import kotlin.math.sin
 
-enum class VisualScene { NONE, HORSE, TOOTHBRUSH, WATER, TOILET, HANDS, BACTERIA, LETTER_A, LETTER_B, LETTER_C }
+enum class VisualScene { NONE, HORSE, FOOD, TOOTHBRUSH, WATER, TOILET, HANDS, BACTERIA, FEELINGS, HAPPY_FACE, SAD_FACE, ANGRY_FACE }
 
-class ChildVisualView @JvmOverloads constructor(
-    context: Context,
-    attrs: AttributeSet? = null
-) : View(context, attrs) {
-
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+class ChildVisualView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private var scene = VisualScene.NONE
     private var phase = 0f
+    fun showScene(s: VisualScene) { scene = s; invalidate() }
 
-    fun showScene(newScene: VisualScene) {
-        scene = newScene
-        invalidate()
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        phase += 0.12f
-        val w = width.toFloat()
-        val h = height.toFloat()
-        paint.style = Paint.Style.FILL
-        paint.color = Color.rgb(20, 34, 58)
-        canvas.drawRoundRect(RectF(0f, 0f, w, h), 42f, 42f, paint)
-        when (scene) {
-            VisualScene.HORSE -> drawHorse(canvas, w, h)
-            VisualScene.TOOTHBRUSH -> drawToothbrush(canvas, w, h)
-            VisualScene.WATER -> drawWater(canvas, w, h)
-            VisualScene.TOILET -> drawToilet(canvas, w, h)
-            VisualScene.HANDS -> drawHands(canvas, w, h)
-            VisualScene.BACTERIA -> drawBacteria(canvas, w, h)
-            VisualScene.LETTER_A -> drawLetter(canvas, w, h, "A")
-            VisualScene.LETTER_B -> drawLetter(canvas, w, h, "B")
-            VisualScene.LETTER_C -> drawLetter(canvas, w, h, "C")
-            VisualScene.NONE -> Unit
+    override fun onDraw(c: Canvas) {
+        phase += .12f; val w=width.toFloat(); val h=height.toFloat()
+        p.style=Paint.Style.FILL; p.color=Color.rgb(242,248,255); c.drawRoundRect(RectF(0f,0f,w,h),38f,38f,p)
+        when(scene){
+            VisualScene.HORSE->horse(c,w,h); VisualScene.FOOD->food(c,w,h); VisualScene.TOOTHBRUSH->brush(c,w,h)
+            VisualScene.WATER->water(c,w,h); VisualScene.TOILET->toilet(c,w,h); VisualScene.HANDS->hands(c,w,h)
+            VisualScene.BACTERIA->bacteria(c,w,h); VisualScene.FEELINGS->feelings(c,w,h)
+            VisualScene.HAPPY_FACE->face(c,w,h,0); VisualScene.SAD_FACE->face(c,w,h,1); VisualScene.ANGRY_FACE->face(c,w,h,2); else->Unit
         }
-        if (scene == VisualScene.BACTERIA) postInvalidateDelayed(60)
+        if(scene==VisualScene.BACTERIA) postInvalidateDelayed(60)
     }
 
-    private fun drawHorse(canvas: Canvas, w: Float, h: Float) {
-        paint.color = Color.rgb(176, 116, 67)
-        canvas.drawOval(RectF(w*.27f, h*.35f, w*.72f, h*.72f), paint)
-        canvas.drawCircle(w*.68f, h*.33f, h*.15f, paint)
-        paint.color = Color.rgb(105, 63, 42)
-        canvas.drawRect(w*.32f, h*.66f, w*.38f, h*.9f, paint)
-        canvas.drawRect(w*.58f, h*.66f, w*.64f, h*.9f, paint)
-        paint.color = Color.BLACK
-        canvas.drawCircle(w*.72f, h*.29f, 8f, paint)
-        paint.color = Color.rgb(91, 54, 32)
-        canvas.drawArc(RectF(w*.55f, h*.1f, w*.78f, h*.5f), 130f, 120f, false, paint)
+    private fun horse(c:Canvas,w:Float,h:Float){
+        // unmistakable friendly side-view horse: four legs, long muzzle, mane, ears and tail
+        p.color=Color.rgb(184,119,68); c.drawOval(RectF(w*.18f,h*.35f,w*.70f,h*.70f),p)
+        c.drawRoundRect(RectF(w*.58f,h*.25f,w*.69f,h*.52f),30f,30f,p)
+        c.drawOval(RectF(w*.60f,h*.15f,w*.84f,h*.42f),p); c.drawOval(RectF(w*.73f,h*.27f,w*.91f,h*.40f),p)
+        p.color=Color.rgb(126,76,45); c.drawOval(RectF(w*.62f,h*.08f,w*.68f,h*.22f),p); c.drawOval(RectF(w*.72f,h*.08f,w*.78f,h*.22f),p)
+        val legs=floatArrayOf(.25f,.39f,.56f,.65f); p.color=Color.rgb(170,103,59)
+        legs.forEach { x->c.drawRoundRect(RectF(w*x,h*.62f,w*(x+.055f),h*.90f),14f,14f,p); p.color=Color.rgb(70,50,42); c.drawRect(w*x,h*.86f,w*(x+.06f),h*.92f,p); p.color=Color.rgb(170,103,59) }
+        p.color=Color.rgb(91,55,38); c.drawCircle(w*.76f,h*.23f,6f,p)
+        p.style=Paint.Style.STROKE;p.strokeWidth=18f;p.strokeCap=Paint.Cap.ROUND;c.drawArc(RectF(w*.05f,h*.32f,w*.27f,h*.65f),120f,120f,false,p)
+        p.strokeWidth=15f;c.drawArc(RectF(w*.52f,h*.13f,w*.70f,h*.49f),105f,125f,false,p);p.style=Paint.Style.FILL
+        p.color=Color.WHITE;c.drawCircle(w*.755f,h*.225f,2f,p)
     }
-
-    private fun drawToothbrush(canvas: Canvas, w: Float, h: Float) {
-        paint.color = Color.rgb(72, 178, 255)
-        canvas.save(); canvas.rotate(-18f, w/2, h/2)
-        canvas.drawRoundRect(RectF(w*.18f, h*.48f, w*.82f, h*.62f), 28f, 28f, paint)
-        paint.color = Color.WHITE
-        for (i in 0..5) canvas.drawRect(w*.67f+i*10f, h*.38f, w*.71f+i*10f, h*.49f, paint)
-        canvas.restore()
-    }
-
-    private fun drawWater(canvas: Canvas, w: Float, h: Float) {
-        paint.color = Color.rgb(84, 194, 255)
-        canvas.drawRoundRect(RectF(w*.32f, h*.2f, w*.68f, h*.82f), 30f, 30f, paint)
-        paint.color = Color.argb(120, 255,255,255)
-        canvas.drawRect(w*.37f, h*.3f, w*.42f, h*.72f, paint)
-    }
-
-    private fun drawToilet(canvas: Canvas, w: Float, h: Float) {
-        paint.color = Color.WHITE
-        canvas.drawRoundRect(RectF(w*.28f, h*.18f, w*.7f, h*.45f), 24f,24f,paint)
-        canvas.drawOval(RectF(w*.3f, h*.37f, w*.72f, h*.72f), paint)
-        canvas.drawRoundRect(RectF(w*.42f, h*.62f, w*.62f, h*.88f),20f,20f,paint)
-        paint.color = Color.rgb(111,205,255)
-        canvas.drawOval(RectF(w*.38f,h*.44f,w*.64f,h*.61f),paint)
-    }
-
-    private fun drawHands(canvas: Canvas, w: Float, h: Float) {
-        paint.color = Color.rgb(255, 201, 158)
-        canvas.drawCircle(w*.38f,h*.52f,h*.18f,paint)
-        canvas.drawCircle(w*.62f,h*.52f,h*.18f,paint)
-        paint.color = Color.rgb(93, 194, 255)
-        for (i in 0..6) {
-            val x = w*.22f + i*w*.09f
-            canvas.drawCircle(x, h*.28f + (i%2)*18f, 9f, paint)
-        }
-    }
-
-    private fun drawBacteria(canvas: Canvas, w: Float, h: Float) {
-        val colors = intArrayOf(Color.rgb(114,239,118), Color.rgb(255,111,164), Color.rgb(255,208,80))
-        for (i in 0..5) {
-            val x = w*(.18f + .13f*i)
-            val y = h*(.32f + .22f*((i%2))) + sin(phase+i).toFloat()*12f
-            paint.color = colors[i%colors.size]
-            canvas.drawCircle(x,y,34f,paint)
-            paint.color = Color.BLACK
-            canvas.drawCircle(x-10f,y-5f,4f,paint)
-            canvas.drawCircle(x+10f,y-5f,4f,paint)
-        }
-        paint.color = Color.rgb(255, 224, 68)
-        val mouth = 22f + sin(phase*2).toFloat()*10f
-        canvas.drawArc(RectF(w*.38f,h*.6f,w*.62f,h*.88f), mouth, 360f-mouth*2, true, paint)
-    }
-
-    private fun drawLetter(canvas: Canvas, w: Float, h: Float, letter: String) {
-        paint.color = Color.WHITE
-        paint.textAlign = Paint.Align.CENTER
-        paint.textSize = h*.72f
-        paint.isFakeBoldText = true
-        canvas.drawText(letter, w/2, h*.76f, paint)
-        paint.isFakeBoldText = false
-    }
+    private fun food(c:Canvas,w:Float,h:Float){p.color=Color.WHITE;c.drawOval(RectF(w*.22f,h*.25f,w*.78f,h*.78f),p);p.color=Color.rgb(255,190,70);c.drawCircle(w*.5f,h*.5f,h*.16f,p);p.color=Color.rgb(102,190,92);c.drawCircle(w*.36f,h*.52f,h*.08f,p)}
+    private fun brush(c:Canvas,w:Float,h:Float){c.save();c.rotate(-15f,w/2,h/2);p.color=Color.rgb(70,160,255);c.drawRoundRect(RectF(w*.18f,h*.48f,w*.82f,h*.62f),25f,25f,p);p.color=Color.WHITE;(0..5).forEach{i->c.drawRect(w*.66f+i*10,h*.37f,w*.69f+i*10,h*.49f,p)};c.restore()}
+    private fun water(c:Canvas,w:Float,h:Float){p.color=Color.rgb(70,180,245);c.drawRoundRect(RectF(w*.34f,h*.18f,w*.66f,h*.82f),25f,25f,p);p.color=Color.argb(150,255,255,255);c.drawRect(w*.39f,h*.25f,w*.43f,h*.70f,p)}
+    private fun toilet(c:Canvas,w:Float,h:Float){p.color=Color.WHITE;c.drawRoundRect(RectF(w*.30f,h*.18f,w*.68f,h*.43f),22f,22f,p);c.drawOval(RectF(w*.29f,h*.38f,w*.72f,h*.70f),p);c.drawRoundRect(RectF(w*.42f,h*.62f,w*.61f,h*.87f),18f,18f,p);p.color=Color.rgb(110,205,255);c.drawOval(RectF(w*.38f,h*.45f,w*.64f,h*.59f),p)}
+    private fun hands(c:Canvas,w:Float,h:Float){p.color=Color.rgb(255,200,158);c.drawCircle(w*.38f,h*.55f,h*.17f,p);c.drawCircle(w*.62f,h*.55f,h*.17f,p);p.color=Color.rgb(75,180,245);(0..7).forEach{i->c.drawCircle(w*(.18f+.09f*i),h*(.25f+.04f*(i%2)),9f,p)}}
+    private fun bacteria(c:Canvas,w:Float,h:Float){val colors=intArrayOf(Color.rgb(95,210,110),Color.rgb(245,105,155),Color.rgb(255,190,55));(0..5).forEach{i->val x=w*(.16f+.135f*i);val y=h*(.35f+.22f*(i%2))+sin(phase+i).toFloat()*10;p.color=colors[i%3];c.drawCircle(x,y,30f,p);p.color=Color.BLACK;c.drawCircle(x-9,y-4,4f,p);c.drawCircle(x+9,y-4,4f,p)}}
+    private fun feelings(c:Canvas,w:Float,h:Float){faceAt(c,w*.23f,h*.5f,h*.18f,0);faceAt(c,w*.5f,h*.5f,h*.18f,1);faceAt(c,w*.77f,h*.5f,h*.18f,2)}
+    private fun face(c:Canvas,w:Float,h:Float,type:Int)=faceAt(c,w/2,h/2,h*.30f,type)
+    private fun faceAt(c:Canvas,x:Float,y:Float,r:Float,type:Int){p.color=when(type){0->Color.rgb(255,210,65);1->Color.rgb(105,185,255);else->Color.rgb(255,120,95)};c.drawCircle(x,y,r,p);p.color=Color.rgb(45,50,65);c.drawCircle(x-r*.35f,y-r*.18f,r*.08f,p);c.drawCircle(x+r*.35f,y-r*.18f,r*.08f,p);p.style=Paint.Style.STROKE;p.strokeWidth=r*.08f;if(type==0)c.drawArc(RectF(x-r*.45f,y-r*.05f,x+r*.45f,y+r*.48f),15f,150f,false,p) else c.drawArc(RectF(x-r*.40f,y+r*.20f,x+r*.40f,y+r*.58f),200f,140f,false,p);p.style=Paint.Style.FILL}
 }
