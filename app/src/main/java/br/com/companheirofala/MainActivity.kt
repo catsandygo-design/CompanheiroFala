@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.GridLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import kotlin.math.abs
@@ -23,7 +24,7 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var face: RobotFaceView
     private lateinit var visual: ChildVisualView
     private lateinit var speechBubble: TextView
-    private lateinit var choices: LinearLayout
+    private lateinit var choices: GridLayout
     private lateinit var status: TextView
     private lateinit var updater: AppUpdater
     private lateinit var voice: VoiceEngine
@@ -31,7 +32,7 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var events: ParentEventRepository
 
     private val profile = ChildProfile.gabi()
-    private val engine = ConversationEngine()
+    private val engine = ConversationEngine(profile)
     private var waitingForMovement = false
     private var autoListenAfterSpeech = false
     private var baselineAcceleration = 0f
@@ -51,14 +52,12 @@ class MainActivity : Activity(), SensorEventListener {
             onResult = { text -> runOnUiThread { handleSpoken(text) } },
             onFailure = { runOnUiThread { status.text = "Não consegui entender. Pode falar de novo?" } }
         )
-
         voice = VoiceEngine(
             context = this,
             onStart = { runOnUiThread { speech.markSpeaking(); face.setMood(RobotMood.SPEAKING) } },
             onDone = {
                 runOnUiThread {
-                    speech.markIdle()
-                    face.setMood(RobotMood.HAPPY)
+                    speech.markIdle(); face.setMood(RobotMood.HAPPY)
                     if (autoListenAfterSpeech && !waitingForMovement) {
                         autoListenAfterSpeech = false
                         status.postDelayed({ startListening() }, 450)
@@ -89,10 +88,9 @@ class MainActivity : Activity(), SensorEventListener {
             setPadding(dp(12), dp(8), dp(12), dp(10))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.rgb(28, 35, 77), Color.rgb(87, 61, 116))
+                intArrayOf(Color.rgb(28,35,77), Color.rgb(87,61,116))
             )
         }
-
         root.addView(TextView(this).apply {
             text = "COMPANHEIRO • v0.7"
             textSize = 13f
@@ -102,10 +100,10 @@ class MainActivity : Activity(), SensorEventListener {
         }, LinearLayout.LayoutParams(-1, dp(26)))
 
         face = RobotFaceView(this)
-        root.addView(face, LinearLayout.LayoutParams(-1, 0, 1.25f))
+        root.addView(face, LinearLayout.LayoutParams(-1, 0, 1.18f))
 
         visual = ChildVisualView(this)
-        root.addView(visual, LinearLayout.LayoutParams(-1, 0, 3.2f).apply {
+        root.addView(visual, LinearLayout.LayoutParams(-1, 0, 3.15f).apply {
             topMargin = dp(5); bottomMargin = dp(6)
         })
 
@@ -115,21 +113,22 @@ class MainActivity : Activity(), SensorEventListener {
             gravity = Gravity.CENTER
             setTypeface(typeface, Typeface.BOLD)
             setPadding(dp(14), dp(8), dp(14), dp(8))
-            background = roundedBackground(Color.rgb(48, 58, 100), 22f)
+            background = roundedBackground(Color.rgb(48,58,100), 22f)
         }
-        root.addView(speechBubble, LinearLayout.LayoutParams(-1, 0, 1.05f))
+        root.addView(speechBubble, LinearLayout.LayoutParams(-1, 0, 1.0f))
 
-        choices = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(0, dp(6), 0, dp(5))
+        choices = GridLayout(this).apply {
+            columnCount = 3
+            rowCount = 2
+            alignmentMode = GridLayout.ALIGN_BOUNDS
+            setPadding(0, dp(5), 0, dp(5))
         }
-        root.addView(choices, LinearLayout.LayoutParams(-1, dp(84)))
+        root.addView(choices, LinearLayout.LayoutParams(-1, dp(132)))
 
         status = TextView(this).apply {
             text = "Toque numa opção ou converse comigo"
             textSize = 12f
-            setTextColor(Color.rgb(225, 230, 248))
+            setTextColor(Color.rgb(225,230,248))
             gravity = Gravity.CENTER
         }
         root.addView(status, LinearLayout.LayoutParams(-1, dp(24)))
@@ -140,7 +139,7 @@ class MainActivity : Activity(), SensorEventListener {
             isAllCaps = false
             setTextColor(Color.WHITE)
             setTypeface(typeface, Typeface.BOLD)
-            background = roundedBackground(Color.rgb(77, 126, 245), 26f)
+            background = roundedBackground(Color.rgb(77,126,245), 26f)
             setOnClickListener { startListening() }
         }, LinearLayout.LayoutParams(-1, dp(62)))
         return root
@@ -152,9 +151,7 @@ class MainActivity : Activity(), SensorEventListener {
         visual.showScene(reply.scene)
         waitingForMovement = reply.waitForMovement
         renderChoices(reply.choices)
-        reply.parentAlert?.let {
-            events.record("emotion_alert", it, "child=${profile.name}")
-        }
+        reply.parentAlert?.let { events.record("emotion_alert", it, "child=${profile.name}") }
         status.text = if (reply.waitForMovement) "Pode deixar o celular aqui. Eu espero você voltar." else "Sua vez. Toque ou fale."
     }
 
@@ -166,28 +163,34 @@ class MainActivity : Activity(), SensorEventListener {
 
     private fun renderChoices(items: List<String>) {
         choices.removeAllViews()
-        items.take(3).forEachIndexed { index, label ->
+        val visible = items.take(6)
+        visible.forEachIndexed { index, label ->
+            val row = index / 3
+            val col = index % 3
             val button = Button(this).apply {
                 text = label
-                textSize = if (label.length <= 2) 29f else 15f
+                textSize = if (label.length <= 2) 29f else 14f
                 isAllCaps = false
                 setTextColor(Color.WHITE)
                 setTypeface(typeface, Typeface.BOLD)
-                background = roundedBackground(choiceColor(label), 22f)
+                background = roundedBackground(choiceColor(label), 20f)
                 setOnClickListener {
-                    if (label == "CONVERSAR") {
-                        startListening(); return@setOnClickListener
-                    }
+                    if (label == "CONVERSAR") { startListening(); return@setOnClickListener }
                     events.record("choice", label)
                     val reply = engine.onChoice(label)
                     renderReply(reply)
                     speakReply(reply)
                 }
             }
-            choices.addView(button, LinearLayout.LayoutParams(0, -1, 1f).apply {
-                marginStart = if (index == 0) 0 else dp(4)
-                marginEnd = if (index == items.lastIndex) 0 else dp(4)
-            })
+            val lp = GridLayout.LayoutParams(
+                GridLayout.spec(row, 1f),
+                GridLayout.spec(col, 1f)
+            ).apply {
+                width = 0
+                height = if (visible.size > 3) dp(58) else dp(72)
+                setMargins(dp(3), dp(3), dp(3), dp(3))
+            }
+            choices.addView(button, lp)
         }
     }
 
@@ -224,12 +227,9 @@ class MainActivity : Activity(), SensorEventListener {
         if (baselineAcceleration == 0f) baselineAcceleration = total
         val now = System.currentTimeMillis()
         if (abs(total - baselineAcceleration) > 5.5f && now - lastMovementAt > 2500) {
-            lastMovementAt = now
-            waitingForMovement = false
+            lastMovementAt = now; waitingForMovement = false
             events.record("routine", "returned_from_bathroom")
-            val reply = engine.onMovementDetected()
-            renderReply(reply)
-            speakReply(reply)
+            val reply = engine.onMovementDetected(); renderReply(reply); speakReply(reply)
         }
         baselineAcceleration = total
     }
@@ -238,9 +238,7 @@ class MainActivity : Activity(), SensorEventListener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_AUDIO && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            status.text = "Microfone pronto."
-        }
+        if (requestCode == REQUEST_AUDIO && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) status.text = "Microfone pronto."
     }
 
     override fun onResume() {
@@ -249,11 +247,13 @@ class MainActivity : Activity(), SensorEventListener {
     }
 
     private fun choiceColor(label: String) = when (label) {
-        "A", "FELIZ" -> Color.rgb(230, 173, 58)
-        "C", "SIM" -> Color.rgb(72, 176, 123)
-        "P", "NÃO", "TRISTE" -> Color.rgb(78, 142, 225)
-        "BRAVA" -> Color.rgb(225, 105, 82)
-        else -> Color.rgb(77, 88, 143)
+        "A", "FELIZ", "ANIMADA" -> Color.rgb(230,173,58)
+        "C", "SIM" -> Color.rgb(72,176,123)
+        "P", "NÃO", "TRISTE" -> Color.rgb(78,142,225)
+        "BRAVA" -> Color.rgb(225,105,82)
+        "MEDO" -> Color.rgb(150,114,220)
+        "CANSADA" -> Color.rgb(105,125,150)
+        else -> Color.rgb(77,88,143)
     }
 
     private fun roundedBackground(color: Int, radius: Float) = GradientDrawable().apply {
