@@ -38,10 +38,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
-    private var continuousMode = false
     private var waitingForMovement = false
     private var baselineAcceleration = 0f
     private var lastMovementAt = 0L
+    private var lastSpokenText = ""
+    private var lastSpokenAt = 0L
     private var sensorManager: SensorManager? = null
     private val engine = ConversationEngine()
 
@@ -58,13 +59,14 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
 
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_AUDIO)
-        } else setupRecognizer()
+        } else {
+            setupRecognizer()
+        }
 
-        val intro = engine.start(PlayMode.CHAT)
+        val intro = engine.start(PlayMode.HOME)
         renderReply(intro)
-        speak(intro.text, false)
-
-        status.postDelayed({ updater.checkAndUpdate { message -> status.text = message } }, 1200)
+        speak(intro.text)
+        status.postDelayed({ updater.checkAndUpdate { message -> status.text = message } }, 1500)
     }
 
     override fun onResume() {
@@ -75,85 +77,66 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
     private fun buildScreen(): View {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(10), dp(14), dp(12))
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.rgb(11,20,43), Color.rgb(29,23,65)))
+            setPadding(dp(12), dp(8), dp(12), dp(10))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(Color.rgb(24, 32, 70), Color.rgb(72, 48, 104))
+            )
         }
 
-        val header = TextView(this).apply {
-            text = "COMPANHEIRO FALA • v0.5"
+        root.addView(TextView(this).apply {
+            text = "COMPANHEIRO • v0.6"
             textSize = 13f
-            setTextColor(Color.rgb(179,214,255))
-            gravity = Gravity.CENTER
-            setTypeface(typeface, Typeface.BOLD)
-        }
-        root.addView(header, LinearLayout.LayoutParams(-1, dp(28)))
-
-        face = RobotFaceView(this)
-        root.addView(face, LinearLayout.LayoutParams(-1, 0, 2.3f))
-
-        visual = ChildVisualView(this)
-        root.addView(visual, LinearLayout.LayoutParams(-1, 0, 2.6f).apply {
-            topMargin = dp(4)
-            bottomMargin = dp(6)
-        })
-
-        speechBubble = TextView(this).apply {
-            textSize = 22f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setTypeface(typeface, Typeface.BOLD)
-            setPadding(dp(18), dp(14), dp(18), dp(14))
-            background = roundedBackground(Color.rgb(34,48,86), 24f)
+        }, LinearLayout.LayoutParams(-1, dp(26)))
+
+        face = RobotFaceView(this)
+        root.addView(face, LinearLayout.LayoutParams(-1, 0, 1.35f))
+
+        visual = ChildVisualView(this)
+        root.addView(visual, LinearLayout.LayoutParams(-1, 0, 3.0f).apply {
+            topMargin = dp(5)
+            bottomMargin = dp(5)
+        })
+
+        speechBubble = TextView(this).apply {
+            textSize = 19f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+            background = roundedBackground(Color.rgb(45, 55, 95), 22f)
         }
-        root.addView(speechBubble, LinearLayout.LayoutParams(-1, 0, 1.6f))
+        root.addView(speechBubble, LinearLayout.LayoutParams(-1, 0, 1.05f))
 
         choices = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, dp(6))
+            setPadding(0, dp(6), 0, dp(5))
         }
-        root.addView(choices, LinearLayout.LayoutParams(-1, dp(82)))
+        root.addView(choices, LinearLayout.LayoutParams(-1, dp(80)))
 
         status = TextView(this).apply {
-            text = "Fale ou toque numa figura"
-            textSize = 13f
-            setTextColor(Color.rgb(185,201,232))
+            text = "Toque numa opção ou converse comigo"
+            textSize = 12f
+            setTextColor(Color.rgb(220, 225, 245))
             gravity = Gravity.CENTER
         }
-        root.addView(status, LinearLayout.LayoutParams(-1, dp(28)))
+        root.addView(status, LinearLayout.LayoutParams(-1, dp(24)))
 
-        val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-
-        val talkParams = LinearLayout.LayoutParams(0, dp(60), 1.7f).apply { marginEnd = dp(6) }
-        bottom.addView(bigButton("FALAR", Color.rgb(57,118,255), talkParams) {
-            continuousMode = true
-            listen()
-        })
-
-        val abcParams = LinearLayout.LayoutParams(0, dp(60), 1f).apply { marginStart = dp(6) }
-        bottom.addView(bigButton("ABC", Color.rgb(124,83,230), abcParams) {
-            continuousMode = true
-            val r = engine.start(PlayMode.LETTERS)
-            renderReply(r)
-            speak(r.text, true)
-        })
-
-        root.addView(bottom, LinearLayout.LayoutParams(-1, dp(64)))
-        return root
-    }
-
-    private fun bigButton(label: String, color: Int, lp: LinearLayout.LayoutParams, action: () -> Unit): Button {
-        return Button(this).apply {
-            text = label
-            textSize = 20f
+        root.addView(Button(this).apply {
+            text = "CONVERSAR"
+            textSize = 19f
             isAllCaps = false
             setTextColor(Color.WHITE)
             setTypeface(typeface, Typeface.BOLD)
-            background = roundedBackground(color, 22f)
-            setOnClickListener { action() }
-            layoutParams = lp
-        }
+            background = roundedBackground(Color.rgb(78, 125, 245), 25f)
+            setOnClickListener { listen() }
+        }, LinearLayout.LayoutParams(-1, dp(60)))
+
+        return root
     }
 
     private fun renderReply(reply: ConversationReply) {
@@ -162,31 +145,33 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
         visual.showScene(reply.scene)
         waitingForMovement = reply.waitForMovement
         renderChoices(reply.choices)
-        status.text = if (reply.waitForMovement) "Pode deixar o celular na mesa" else "Fale ou toque numa opção"
+        status.text = if (reply.waitForMovement) "Eu espero você voltar" else "Toque numa opção ou converse comigo"
+        reply.parentAlert?.let { saveParentAlert(it) }
     }
 
     private fun renderChoices(items: List<String>) {
         choices.removeAllViews()
         items.take(3).forEachIndexed { index, label ->
             val color = when (label) {
-                "A" -> Color.rgb(249,95,95)
-                "B" -> Color.rgb(83,170,255)
-                "C" -> Color.rgb(89,206,126)
-                else -> Color.rgb(61,82,130)
+                "A" -> Color.rgb(236, 104, 104)
+                "C" -> Color.rgb(67, 174, 118)
+                "P" -> Color.rgb(85, 140, 240)
+                "FELIZ" -> Color.rgb(224, 174, 55)
+                "TRISTE" -> Color.rgb(75, 145, 220)
+                "BRAVA" -> Color.rgb(225, 105, 80)
+                else -> Color.rgb(71, 82, 135)
             }
             val button = Button(this).apply {
                 text = label
-                textSize = if (label.length <= 2) 30f else 16f
+                textSize = if (label.length <= 2) 30f else 15f
                 isAllCaps = false
                 setTextColor(Color.WHITE)
                 setTypeface(typeface, Typeface.BOLD)
                 background = roundedBackground(color, 22f)
                 setOnClickListener {
-                    var r = engine.onChoice(label)
-                    if (label == "NÃO" && speechBubble.text.toString().contains("Lavou", true)) r = engine.onHandsNotWashed()
-                    continuousMode = true
-                    renderReply(r)
-                    speak(r.text, r.keepListening)
+                    val reply = engine.onChoice(label)
+                    renderReply(reply)
+                    speak(reply.text)
                 }
             }
             choices.addView(button, LinearLayout.LayoutParams(0, -1, 1f).apply {
@@ -197,26 +182,37 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
     }
 
     private fun setupRecognizer() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) return
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            status.text = "Reconhecimento de voz indisponível neste aparelho"
+            return
+        }
         recognizer?.destroy()
         recognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
             setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) { face.setMood(RobotMood.LISTENING); status.text = "Estou ouvindo..." }
+                override fun onReadyForSpeech(params: Bundle?) {
+                    face.setMood(RobotMood.LISTENING)
+                    status.text = "Estou ouvindo..."
+                }
                 override fun onBeginningOfSpeech() { face.setMood(RobotMood.LISTENING) }
                 override fun onRmsChanged(rmsdB: Float) { face.setVoiceLevel(rmsdB) }
                 override fun onBufferReceived(buffer: ByteArray?) = Unit
-                override fun onEndOfSpeech() { face.setMood(RobotMood.THINKING); face.setVoiceLevel(0f) }
+                override fun onEndOfSpeech() {
+                    face.setMood(RobotMood.THINKING)
+                    face.setVoiceLevel(0f)
+                }
                 override fun onError(error: Int) {
                     face.setMood(RobotMood.CONFUSED)
-                    status.text = "Não entendi. Toque em FALAR."
+                    status.text = "Não entendi. Toque em CONVERSAR e tente de novo."
                 }
                 override fun onResults(results: Bundle?) {
                     val raw = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                    if (raw.isNotBlank()) {
-                        val r = engine.reply(raw)
-                        renderReply(r)
-                        speak(r.text, r.keepListening)
+                    if (raw.isBlank()) {
+                        status.text = "Não ouvi nenhuma palavra."
+                        return
                     }
+                    val reply = engine.reply(raw)
+                    renderReply(reply)
+                    speak(reply.text)
                 }
                 override fun onPartialResults(partialResults: Bundle?) = Unit
                 override fun onEvent(eventType: Int, params: Bundle?) = Unit
@@ -225,54 +221,74 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
     }
 
     private fun listen() {
-        if (!continuousMode || waitingForMovement) return
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
-        if (recognizer == null) setupRecognizer()
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-        }
-        recognizer?.startListening(intent)
-    }
-
-    private fun speak(text: String, listenAfter: Boolean) {
-        if (!ttsReady) {
-            if (listenAfter && continuousMode) speechBubble.postDelayed({ listen() }, 600)
+        if (waitingForMovement) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_AUDIO)
             return
         }
-        face.setMood(RobotMood.SPEAKING)
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, if (listenAfter) "listen" else "done")
+        if (recognizer == null) setupRecognizer()
+        recognizer?.cancel()
+        recognizer?.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+        })
     }
 
-    private fun configurePrincessVoice() {
-        val locale = Locale("pt", "BR")
-        val voices = tts?.voices.orEmpty().filter { it.locale.language == "pt" }
-        val chosen = voices.sortedWith(
+    private fun speak(text: String) {
+        val now = System.currentTimeMillis()
+        if (text == lastSpokenText && now - lastSpokenAt < 2500) return
+        lastSpokenText = text
+        lastSpokenAt = now
+        if (!ttsReady) return
+        recognizer?.cancel()
+        face.setMood(RobotMood.SPEAKING)
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "child_reply")
+    }
+
+    private fun configureFriendlyVoice() {
+        val locale = Locale.forLanguageTag("pt-BR")
+        tts?.setLanguage(locale)
+        val ptBrVoices = tts?.voices.orEmpty().filter {
+            it.locale.language == "pt" && it.locale.country.equals("BR", ignoreCase = true)
+        }
+        val preferred = ptBrVoices.sortedWith(
             compareByDescending<android.speech.tts.Voice> { !it.isNetworkConnectionRequired }
                 .thenByDescending { it.quality }
+                .thenByDescending { it.latency }
         ).firstOrNull()
-        if (chosen != null) tts?.voice = chosen
-        tts?.setLanguage(locale)
-        tts?.setSpeechRate(0.82f)
-        tts?.setPitch(1.28f)
+        if (preferred != null) tts?.voice = preferred
+        // Pitch excessivo deixava a voz fina/anasalada. Mantemos quase natural.
+        tts?.setSpeechRate(0.90f)
+        tts?.setPitch(1.04f)
     }
 
-    override fun onInit(status: Int) {
-        if (status != TextToSpeech.SUCCESS) return
+    override fun onInit(initStatus: Int) {
+        if (initStatus != TextToSpeech.SUCCESS) return
         ttsReady = true
-        configurePrincessVoice()
+        configureFriendlyVoice()
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) { runOnUiThread { face.setMood(RobotMood.SPEAKING) } }
+            override fun onStart(utteranceId: String?) {
+                runOnUiThread { face.setMood(RobotMood.SPEAKING) }
+            }
             override fun onDone(utteranceId: String?) {
                 runOnUiThread {
                     face.setMood(RobotMood.HAPPY)
-                    if (utteranceId == "listen" && continuousMode && !waitingForMovement) speechBubble.postDelayed({ listen() }, 550)
+                    status.text = "Sua vez. Toque em CONVERSAR ou numa opção."
                 }
             }
-            @Deprecated("Deprecated in Java") override fun onError(utteranceId: String?) = Unit
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) = Unit
         })
+    }
+
+    private fun saveParentAlert(message: String) {
+        getSharedPreferences("parent_alerts", Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_alert_time", System.currentTimeMillis())
+            .putString("last_alert_message", message)
+            .apply()
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -283,10 +299,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
         if (abs(total - baselineAcceleration) > 5.5f && now - lastMovementAt > 2500) {
             lastMovementAt = now
             waitingForMovement = false
-            val r = engine.onMovementDetected()
-            renderReply(r)
-            continuousMode = true
-            speak(r.text, true)
+            val reply = engine.onMovementDetected()
+            renderReply(reply)
+            speak(reply.text)
         }
         baselineAcceleration = total
     }
