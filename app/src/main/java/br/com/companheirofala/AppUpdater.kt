@@ -41,10 +41,12 @@ class AppUpdater(private val activity: Activity) {
                         }
                     }
                 }
-                if (apkUrl != null && isNewer(tag, BuildConfig.VERSION_NAME)) {
+                val packageInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
+                val localVersion = packageInfo.versionName ?: "0.0.0"
+                if (apkUrl != null && isNewer(tag, localVersion)) {
                     activity.runOnUiThread {
                         onStatus("Nova versão $tag encontrada. Baixando atualização...")
-                        downloadAndInstall(apkUrl!!, tag, onStatus)
+                        downloadAndInstall(apkUrl, tag, onStatus)
                     }
                 }
             } catch (_: Exception) {
