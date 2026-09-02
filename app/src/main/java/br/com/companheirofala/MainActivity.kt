@@ -33,6 +33,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
     private lateinit var speechBubble: TextView
     private lateinit var choices: LinearLayout
     private lateinit var status: TextView
+    private lateinit var updater: AppUpdater
 
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
@@ -52,12 +53,24 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
             sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
         setContentView(buildScreen())
+        updater = AppUpdater(this)
+
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_AUDIO)
         } else setupRecognizer()
+
         val intro = engine.start(PlayMode.CHAT)
         renderReply(intro)
         speak(intro.text, false)
+
+        status.postDelayed({
+            updater.checkAndUpdate { message -> status.text = message }
+        }, 1200)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::updater.isInitialized) updater.onResume()
     }
 
     private fun buildScreen(): View {
@@ -69,7 +82,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
         }
 
         val header = TextView(this).apply {
-            text = "COMPANHEIRO FALA • v0.4"
+            text = "COMPANHEIRO FALA • v0.5"
             textSize = 13f
             setTextColor(Color.rgb(179,214,255))
             gravity = Gravity.CENTER
