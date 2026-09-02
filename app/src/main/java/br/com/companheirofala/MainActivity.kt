@@ -27,7 +27,6 @@ import java.util.Locale
 import kotlin.math.abs
 
 class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListener {
-
     private lateinit var face: RobotFaceView
     private lateinit var visual: ChildVisualView
     private lateinit var speechBubble: TextView
@@ -51,18 +50,13 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
         setContentView(buildScreen())
         updater = AppUpdater(this)
         tts = TextToSpeech(this, this)
-
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
             sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
-
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_AUDIO)
-        } else {
-            setupRecognizer()
-        }
-
+        } else setupRecognizer()
         val intro = engine.start(PlayMode.HOME)
         renderReply(intro)
         speak(intro.text)
@@ -83,7 +77,6 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
                 intArrayOf(Color.rgb(24, 32, 70), Color.rgb(72, 48, 104))
             )
         }
-
         root.addView(TextView(this).apply {
             text = "COMPANHEIRO • v0.6"
             textSize = 13f
@@ -91,16 +84,13 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
             gravity = Gravity.CENTER
             setTypeface(typeface, Typeface.BOLD)
         }, LinearLayout.LayoutParams(-1, dp(26)))
-
         face = RobotFaceView(this)
         root.addView(face, LinearLayout.LayoutParams(-1, 0, 1.35f))
-
         visual = ChildVisualView(this)
         root.addView(visual, LinearLayout.LayoutParams(-1, 0, 3.0f).apply {
             topMargin = dp(5)
             bottomMargin = dp(5)
         })
-
         speechBubble = TextView(this).apply {
             textSize = 19f
             setTextColor(Color.WHITE)
@@ -110,14 +100,12 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
             background = roundedBackground(Color.rgb(45, 55, 95), 22f)
         }
         root.addView(speechBubble, LinearLayout.LayoutParams(-1, 0, 1.05f))
-
         choices = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(0, dp(6), 0, dp(5))
         }
         root.addView(choices, LinearLayout.LayoutParams(-1, dp(80)))
-
         status = TextView(this).apply {
             text = "Toque numa opção ou converse comigo"
             textSize = 12f
@@ -125,7 +113,6 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
             gravity = Gravity.CENTER
         }
         root.addView(status, LinearLayout.LayoutParams(-1, dp(24)))
-
         root.addView(Button(this).apply {
             text = "CONVERSAR"
             textSize = 19f
@@ -135,7 +122,6 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
             background = roundedBackground(Color.rgb(78, 125, 245), 25f)
             setOnClickListener { listen() }
         }, LinearLayout.LayoutParams(-1, dp(60)))
-
         return root
     }
 
@@ -169,9 +155,13 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
                 setTypeface(typeface, Typeface.BOLD)
                 background = roundedBackground(color, 22f)
                 setOnClickListener {
-                    val reply = engine.onChoice(label)
-                    renderReply(reply)
-                    speak(reply.text)
+                    if (label == "CONVERSAR") {
+                        listen()
+                    } else {
+                        val reply = engine.onChoice(label)
+                        renderReply(reply)
+                        speak(reply.text)
+                    }
                 }
             }
             choices.addView(button, LinearLayout.LayoutParams(0, -1, 1f).apply {
@@ -256,10 +246,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener, SensorEventListene
         val preferred = ptBrVoices.sortedWith(
             compareByDescending<android.speech.tts.Voice> { !it.isNetworkConnectionRequired }
                 .thenByDescending { it.quality }
-                .thenByDescending { it.latency }
         ).firstOrNull()
         if (preferred != null) tts?.voice = preferred
-        // Pitch excessivo deixava a voz fina/anasalada. Mantemos quase natural.
         tts?.setSpeechRate(0.90f)
         tts?.setPitch(1.04f)
     }
