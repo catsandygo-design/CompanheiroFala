@@ -42,6 +42,13 @@ jobs:
       - name: Test offline conversation engine
         run: gradle :app:testDebugUnitTest
 
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CompanheiroFala-test-report
+          path: app/build/reports/tests/testDebugUnitTest
+
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
