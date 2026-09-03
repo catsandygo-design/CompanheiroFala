@@ -1,6 +1,9 @@
 package br.com.companheirofala
 
 import android.Manifest
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
@@ -46,6 +49,7 @@ class MainActivity : Activity(), SensorEventListener {
     private var lastMovementAt = 0L
     private var lastInteractionAt = System.currentTimeMillis()
     private var sensorManager: SensorManager? = null
+    private var fairyIdleAnimation: AnimatorSet? = null
 
     private val proactivePrompt = object : Runnable {
         override fun run() {
@@ -68,6 +72,7 @@ class MainActivity : Activity(), SensorEventListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildScreen())
+        startFairyIdleAnimation()
         updater = AppUpdater(this)
         events = ParentEventRepository(this)
         tracker = DevelopmentTracker(this)
@@ -88,7 +93,9 @@ class MainActivity : Activity(), SensorEventListener {
                     setFairyMood(RobotMood.HAPPY)
                     if (autoListenAfterSpeech && !waitingForMovement) {
                         autoListenAfterSpeech = false
-                        status.postDelayed({ startListening() }, 400)
+                        // Pausa antes de ouvir de novo: dá tempo para a criança
+                        // processar a pergunta sem a sensação de pressa.
+                        status.postDelayed({ startListening() }, 1200)
                     }
                 }
             },
@@ -320,6 +327,23 @@ class MainActivity : Activity(), SensorEventListener {
         else -> Color.rgb(142, 91, 190)
     }
 
+    private fun startFairyIdleAnimation() {
+        val floatUpAndDown = ObjectAnimator.ofFloat(fairy, View.TRANSLATION_Y, 0f, -dp(7).toFloat(), 0f).apply {
+            duration = 2100L
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.RESTART
+        }
+        val gentleWiggle = ObjectAnimator.ofFloat(fairy, View.ROTATION, -1.1f, 1.1f, -1.1f).apply {
+            duration = 3100L
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+        }
+        fairyIdleAnimation = AnimatorSet().apply {
+            playTogether(floatUpAndDown, gentleWiggle)
+            start()
+        }
+    }
+
     private fun choiceSymbol(label: String) = when (label) {
         "BRINCAR" -> "🎲"
         "ANIMAIS" -> "🐴"
@@ -371,6 +395,7 @@ class MainActivity : Activity(), SensorEventListener {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
+        fairyIdleAnimation?.cancel()
         handler.removeCallbacks(proactivePrompt)
         sensorManager?.unregisterListener(this)
         if (::speech.isInitialized) speech.destroy()

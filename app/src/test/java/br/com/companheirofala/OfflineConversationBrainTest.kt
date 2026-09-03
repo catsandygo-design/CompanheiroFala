@@ -15,11 +15,28 @@ class OfflineConversationBrainTest {
     }
 
     @Test
-    fun keepsSchoolConversationInContext() {
+    fun schoolConversationUsesOneConcreteQuestionAtATime() {
         val reply = engine.reply("Hoje brinquei com minha amiga na escola")
 
-        assertTrue(reply.text.contains("escola"))
-        assertTrue(reply.choices.contains("BRINCADEIRA"))
+        assertTrue(reply.text.contains("aconteceu alguma coisa"))
+        assertTrue(reply.choices.contains("SIM"))
+    }
+
+    @Test
+    fun schoolConversationAcceptsShortYesThenBadSpelling() {
+        engine.reply("Na escola")
+        val kind = engine.reply("sim")
+        val concern = engine.reply("ruin")
+
+        assertTrue(kind.choices.contains("RUIM"))
+        assertTrue(concern.text.contains("machucou ou assustou"))
+    }
+
+    @Test
+    fun alixiPhysicalReportAlwaysCreatesProtectionAlert() {
+        val reply = engine.reply("Alixi me bateu")
+
+        assertTrue(reply.parentAlert?.contains("ALERTA DE PROTEÇÃO") == true)
     }
 
     @Test

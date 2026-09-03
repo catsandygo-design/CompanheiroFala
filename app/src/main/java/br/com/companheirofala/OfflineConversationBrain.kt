@@ -34,12 +34,6 @@ class OfflineConversationBrain(private val profile: ChildProfile) {
                 RobotMood.CURIOUS,
                 listOf("CONTAR", "BRINCAR", "CARINHAS")
             )
-            matches(text, "escola", "professora", "professor", "amiguinho", "amiguinha", "coleguinha") -> answer(
-                Topic.SCHOOL,
-                "Entendi. Na escola aconteceu uma coisa boa, uma coisa difícil ou uma brincadeira que você gostou?",
-                RobotMood.CURIOUS,
-                listOf("COISA BOA", "COISA DIFÍCIL", "BRINCADEIRA")
-            )
             matches(text, "mae", "mamae", "pai", "papai", "vovo", "vovo", "familia") -> answer(
                 Topic.FAMILY,
                 "Sua família é importante. O que você fez com essa pessoa hoje?",

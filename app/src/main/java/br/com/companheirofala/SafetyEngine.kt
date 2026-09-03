@@ -27,7 +27,7 @@ class SafetyEngine(private val profile: ChildProfile) {
             .firstOrNull { text.contains(it) }
         val probablePhysical = actionWord != null && (
             knownPerson != null || text.contains("mi ") || text.contains("me ") ||
-                text.startsWith("aixi") || text.startsWith("alici") || text.startsWith("alice")
+                text.startsWith("aixi") || text.startsWith("alixi") || text.startsWith("alici") || text.startsWith("alice")
             )
 
         if (directPhysical || probablePhysical) {

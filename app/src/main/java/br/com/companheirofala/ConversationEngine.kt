@@ -15,7 +15,7 @@ data class ConversationReply(
     val parentAlert: String? = null
 )
 
-private enum class PendingTurn { NONE, FEELING_REASON, FALL_HURT, HURT_WHERE, SAFETY_HURT, SAFETY_WHERE, STORY_CHOICE }
+private enum class PendingTurn { NONE, FEELING_REASON, FALL_HURT, HURT_WHERE, SAFETY_HURT, SAFETY_WHERE, SCHOOL_HAPPENED, SCHOOL_KIND, SCHOOL_SAFETY, STORY_CHOICE }
 
 class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()) {
     private val safety = SafetyEngine(profile)
@@ -63,6 +63,11 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
         }
 
         handlePending(text, original)?.let { return it }
+
+        // Pergunta concreta, uma etapa por vez. "Como foi a escola?" costuma
+        // gerar respostas pouco específicas; esta sequência aceita também
+        // respostas curtas como "sim", "ruim" e "nada".
+        if (isSchoolTalk(text)) return schoolCheckIn()
 
         // Frases de conversa livre (escola, família, afeto e aprendizagem)
         // têm prioridade sobre atalhos genéricos, como "brincar", mas nunca
@@ -226,7 +231,54 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
             else -> ConversationReply("Você se machucou? Está doendo em algum lugar?", RobotMood.SAD, true, choices = listOf("SIM", "NÃO"))
         }
         PendingTurn.SAFETY_WHERE -> { pending = PendingTurn.NONE; ConversationReply("Obrigada por me contar. Fica perto de um adulto em quem você confia enquanto isso fica registrado.", RobotMood.SAD, choices = listOf("CHAMAR ADULTO", "INÍCIO"), parentAlert = "Dor indicada após relato de proteção: \"$original\".") }
+        PendingTurn.SCHOOL_HAPPENED -> when {
+            isYes(text) -> schoolKindQuestion()
+            isNo(text) || isNothing(text) -> {
+                pending = PendingTurn.NONE
+                ConversationReply("Tudo bem. Podemos brincar juntas agora?", RobotMood.HAPPY, choices = listOf("BRINCAR", "HISTÓRIA", "ANIMAIS"))
+            }
+            isBad(text) -> schoolSafetyQuestion()
+            else -> ConversationReply("Na escola aconteceu alguma coisa? Pode tocar no sim ou no não.", RobotMood.CURIOUS, choices = listOf("SIM", "NÃO"))
+        }
+        PendingTurn.SCHOOL_KIND -> when {
+            isBad(text) -> schoolSafetyQuestion()
+            isGood(text) -> {
+                pending = PendingTurn.NONE
+                ConversationReply("Que bom! Você quer me contar a coisa boa ou brincar agora?", RobotMood.HAPPY, choices = listOf("CONTAR", "BRINCAR", "HISTÓRIA"))
+            }
+            isNothing(text) || isNo(text) -> {
+                pending = PendingTurn.NONE
+                ConversationReply("Tudo bem. Vamos escolher uma brincadeira tranquila?", RobotMood.HAPPY, choices = listOf("BRINCAR", "ANIMAIS", "HISTÓRIA"))
+            }
+            else -> ConversationReply("Foi uma coisa boa, ruim ou nada?", RobotMood.CURIOUS, choices = listOf("BOA", "RUIM", "NADA"))
+        }
+        PendingTurn.SCHOOL_SAFETY -> when {
+            isYes(text) -> {
+                pending = PendingTurn.NONE
+                ConversationReply("Obrigada por contar. Fica perto de um adulto em quem você confia agora.", RobotMood.SAD, choices = listOf("CHAMAR ADULTO", "INÍCIO"), parentAlert = "${profile.name} disse que algo ruim aconteceu na escola e indicou que houve medo ou machucado.")
+            }
+            isNo(text) -> {
+                pending = PendingTurn.NONE
+                ConversationReply("Entendi. Mesmo assim, você pode contar para um adulto em quem confia quando quiser.", RobotMood.CURIOUS, choices = listOf("CHAMAR ADULTO", "BRINCAR", "INÍCIO"), parentAlert = "${profile.name} disse que algo ruim aconteceu na escola.")
+            }
+            else -> ConversationReply("Alguém machucou ou assustou você?", RobotMood.SAD, choices = listOf("SIM", "NÃO"))
+        }
         PendingTurn.STORY_CHOICE -> storyChoice(original.uppercase(Locale.forLanguageTag("pt-BR")))
+    }
+
+    private fun schoolCheckIn(): ConversationReply {
+        pending = PendingTurn.SCHOOL_HAPPENED
+        return ConversationReply("Na escola aconteceu alguma coisa?", RobotMood.CURIOUS, keepListening = true, choices = listOf("SIM", "NÃO"))
+    }
+
+    private fun schoolKindQuestion(): ConversationReply {
+        pending = PendingTurn.SCHOOL_KIND
+        return ConversationReply("Foi uma coisa boa, ruim ou nada?", RobotMood.CURIOUS, keepListening = true, choices = listOf("BOA", "RUIM", "NADA"))
+    }
+
+    private fun schoolSafetyQuestion(): ConversationReply {
+        pending = PendingTurn.SCHOOL_SAFETY
+        return ConversationReply("Entendi. Alguém machucou ou assustou você?", RobotMood.SAD, keepListening = true, choices = listOf("SIM", "NÃO"), parentAlert = "${profile.name} disse que aconteceu algo ruim na escola.")
     }
 
     private fun fallResponse(original: String): ConversationReply {
@@ -296,6 +348,10 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
 
     private fun isYes(text: String) = containsAny(text, "sim", "aham", "uhum", "machuquei", "doendo", "doi")
     private fun isNo(text: String) = containsAny(text, "nao", "não", "nao machuquei", "não machuquei")
+    private fun isGood(text: String) = containsAny(text, "boa", "bom", "legal", "feliz", "gostei")
+    private fun isBad(text: String) = containsAny(text, "ruim", "ruin", "mal", "chato", "triste", "medo")
+    private fun isNothing(text: String) = containsAny(text, "nada", "nenhuma coisa")
+    private fun isSchoolTalk(text: String) = containsAny(text, "escola", "professora", "professor", "coleguinha", "coleguinho", "amiguinha", "amiguinho")
     private fun containsAny(text: String, vararg terms: String) = terms.any { text.contains(normalize(it)) }
     private fun normalize(value: String): String {
         val n = Normalizer.normalize(value.lowercase(Locale.forLanguageTag("pt-BR")), Normalizer.Form.NFD)
