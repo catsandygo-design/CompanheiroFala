@@ -15,9 +15,7 @@ data class ConversationReply(
     val parentAlert: String? = null
 )
 
-private enum class PendingTurn {
-    NONE, FEELING_REASON, FALL_HURT, HURT_WHERE, SAFETY_HURT, SAFETY_WHERE, STORY_CHOICE
-}
+private enum class PendingTurn { NONE, FEELING_REASON, FALL_HURT, HURT_WHERE, SAFETY_HURT, SAFETY_WHERE, STORY_CHOICE }
 
 class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()) {
     private val safety = SafetyEngine(profile)
@@ -51,16 +49,15 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
         if (text.isBlank()) return guidedFallback()
         lastChildUtterance = original
 
-        val safetyDecision = safety.inspect(original)
-        if (safetyDecision.triggered) {
-            pending = if (safetyDecision.askIfHurt) PendingTurn.SAFETY_HURT else PendingTurn.NONE
+        safety.inspect(original).takeIf { it.triggered }?.let { decision ->
+            pending = if (decision.askIfHurt) PendingTurn.SAFETY_HURT else PendingTurn.NONE
             return ConversationReply(
-                safetyDecision.spokenReply,
+                decision.spokenReply,
                 RobotMood.SAD,
                 keepListening = true,
                 scene = VisualScene.SAD_FACE,
-                choices = if (safetyDecision.askIfHurt) listOf("SIM", "NÃO") else listOf("CONVERSAR", "CHAMAR ADULTO"),
-                parentAlert = safetyDecision.parentAlert
+                choices = if (decision.askIfHurt) listOf("SIM", "NÃO") else listOf("CONVERSAR", "CHAMAR ADULTO"),
+                parentAlert = decision.parentAlert
             )
         }
 
@@ -88,6 +85,8 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
             c == "CONVERSAR" -> ConversationReply("Pode falar comigo. Eu estou te ouvindo.", RobotMood.CURIOUS, keepListening = true, choices = listOf("BRINCAR", "CARINHAS"))
             c == "INÍCIO" || c == "INICIO" -> start(PlayMode.HOME)
             c == "CHAMAR ADULTO" -> ConversationReply("Chama um adulto em quem você confia e fica pertinho dele, tá?", RobotMood.SAD, parentAlert = "A criança tocou em CHAMAR ADULTO após uma interação de proteção.")
+            c == "BANHEIRO" -> bathroomPrompt()
+            c == "ÁGUA" || c == "AGUA" -> waterPrompt()
             mode == PlayMode.LETTERS && c.length == 1 -> letterChoice(c)
             mode == PlayMode.ANIMALS && c in setOf("CAVALO", "GATO", "CACHORRO") -> animalChoice(c)
             pending == PendingTurn.STORY_CHOICE -> storyChoice(c)
@@ -97,7 +96,7 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     }
 
     fun onMovementDetected(): ConversationReply {
-        return if (routineStep == "banheiro") {
+        return if (routineStep == "banheiro_esperando") {
             routineStep = "maos"
             ConversationReply("Você voltou! Lavou a mãozinha com água e sabão?", RobotMood.CURIOUS, scene = VisualScene.HANDS, choices = listOf("SIM", "NÃO"))
         } else home()
@@ -105,10 +104,10 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
 
     private fun detectCommand(text: String): ConversationReply? = when {
         containsAny(text, "oi", "ola", "bom dia", "boa tarde", "boa noite") -> home()
-        containsAny(text, "brincar", "brinca", "jogar", "jogo") -> start(PlayMode.PLAY)
-        containsAny(text, "historia", "historinha", "conta uma historia") -> start(PlayMode.STORY)
-        containsAny(text, "animal", "animais", "cavalo", "gato", "cachorro") -> start(PlayMode.ANIMALS)
-        containsAny(text, "letra", "abc", "alfabeto", "aprender") -> start(PlayMode.LETTERS)
+        containsAny(text, "quero brincar", "vamos brincar", "brincar", "brinca", "jogar", "jogo") -> start(PlayMode.PLAY)
+        containsAny(text, "conta uma historia", "quero historia", "historia", "historinha") -> start(PlayMode.STORY)
+        containsAny(text, "quero ver animal", "animal", "animais", "cavalo", "gato", "cachorro") -> start(PlayMode.ANIMALS)
+        containsAny(text, "quero aprender", "letra", "abc", "alfabeto", "aprender") -> start(PlayMode.LETTERS)
         containsAny(text, "carinha", "sentimento", "emocao") -> start(PlayMode.FEELINGS)
         containsAny(text, "triste", "chateada") -> feeling("TRISTE")
         containsAny(text, "feliz", "contente") -> feeling("FELIZ")
@@ -117,9 +116,9 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
         containsAny(text, "cansada", "sono") -> feeling("CANSADA")
         containsAny(text, "animada", "empolgada") -> feeling("ANIMADA")
         containsAny(text, "cai", "tropecei", "machuquei") -> fallResponse(lastChildUtterance)
-        containsAny(text, "agua", "sede") -> waterPrompt()
-        containsAny(text, "fome", "comer", "comida", "almoco", "janta") -> foodPrompt()
-        containsAny(text, "xixi", "coco", "banheiro") -> bathroomPrompt()
+        containsAny(text, "quero agua", "beber agua", "agua", "sede") -> waterPrompt()
+        containsAny(text, "fome", "quero comer", "comer", "comida", "almoco", "janta") -> foodPrompt()
+        containsAny(text, "quero fazer xixi", "fazer xixi", "quero xixi", "xixi", "coco", "banheiro") -> bathroomPrompt()
         containsAny(text, "escovar", "dente", "dentes") -> toothbrushPrompt()
         containsAny(text, "inicio", "menu", "voltar") -> start(PlayMode.HOME)
         else -> null
@@ -139,44 +138,38 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
 
     private fun animalGame(): ConversationReply {
         mode = PlayMode.ANIMALS
-        return ConversationReply("Olha bem! Esse animal corre, tem quatro patas e faz pocotó. Quem é?", RobotMood.CURIOUS, scene = VisualScene.HORSE, choices = listOf("CAVALO", "GATO", "CACHORRO"))
+        return ConversationReply("Olha bem! Esse animal tem crina, quatro patas, casco e faz pocotó. Quem é?", RobotMood.CURIOUS, scene = VisualScene.HORSE, choices = listOf("CAVALO", "GATO", "CACHORRO"))
     }
 
-    private fun animalChoice(choice: String): ConversationReply {
-        return if (choice == "CAVALO") {
-            ConversationReply("Acertou! É um cavalo! Caa-va-lo. Agora vamos descobrir a primeira letra?", RobotMood.PROUD, scene = VisualScene.HORSE, choices = listOf("ABC", "DE NOVO", "INÍCIO"))
-        } else {
-            ConversationReply("Quase! Olha as patas e pensa no som pocotó. Tenta mais uma vez.", RobotMood.CURIOUS, scene = VisualScene.HORSE, choices = listOf("CAVALO", "GATO", "CACHORRO"))
-        }
+    private fun animalChoice(choice: String) = if (choice == "CAVALO") {
+        ConversationReply("Acertou! É um cavalo! Caa-va-lo. Agora vamos descobrir a primeira letra?", RobotMood.PROUD, scene = VisualScene.HORSE, choices = listOf("ABC", "DE NOVO", "INÍCIO"))
+    } else {
+        ConversationReply("Quase! Olha a crina, o rabo e os cascos. Ele faz pocotó. Tenta mais uma vez.", RobotMood.CURIOUS, scene = VisualScene.HORSE, choices = listOf("CAVALO", "GATO", "CACHORRO"))
     }
 
     private fun letterQuestion(): ConversationReply {
         mode = PlayMode.LETTERS
-        letterWord = "cavalo"
-        letterAnswer = "C"
+        letterWord = "cavalo"; letterAnswer = "C"
         return ConversationReply("Cavalo começa com o som Caaa. Qual é a primeira letra de cavalo?", RobotMood.CURIOUS, scene = VisualScene.HORSE, choices = listOf("A", "C", "P"))
     }
 
-    private fun letterChoice(choice: String): ConversationReply {
-        return if (choice == letterAnswer) {
-            ConversationReply("Isso! $letterWord começa com $letterAnswer. Muito bem! Quer brincar de novo ou escolher outra coisa?", RobotMood.PROUD, scene = VisualScene.HORSE, choices = listOf("DE NOVO", "ANIMAIS", "INÍCIO"))
-        } else {
-            ConversationReply("Boa tentativa. Escuta comigo: Caaa-va-lo. Qual letra faz Caaa?", RobotMood.CURIOUS, scene = VisualScene.HORSE, choices = listOf("A", "C", "P"))
-        }
+    private fun letterChoice(choice: String) = if (choice == letterAnswer) {
+        ConversationReply("Isso! $letterWord começa com $letterAnswer. Muito bem!", RobotMood.PROUD, scene = VisualScene.HORSE, choices = listOf("DE NOVO", "ANIMAIS", "INÍCIO"))
+    } else {
+        ConversationReply("Boa tentativa. Escuta comigo: Caaa-va-lo. Qual letra faz Caaa?", RobotMood.CURIOUS, scene = VisualScene.HORSE, choices = listOf("A", "C", "P"))
     }
 
     private fun storyStart(): ConversationReply {
-        mode = PlayMode.STORY
-        pending = PendingTurn.STORY_CHOICE
+        mode = PlayMode.STORY; pending = PendingTurn.STORY_CHOICE
         return ConversationReply("Era uma vez um cavalinho que encontrou uma luz brilhando na floresta. Ele vai até a luz ou chama a fadinha?", RobotMood.SURPRISED, scene = VisualScene.HORSE, choices = listOf("IR ATÉ A LUZ", "CHAMAR A FADA"))
     }
 
     private fun storyChoice(choice: String): ConversationReply {
         pending = PendingTurn.NONE
         return if (choice.contains("LUZ")) {
-            ConversationReply("O cavalinho chegou pertinho e descobriu que eram vagalumes dançando! Ele ficou feliz e voltou para casa. Quer outra história?", RobotMood.HAPPY, scene = VisualScene.EXCITED_FACE, choices = listOf("HISTÓRIA", "BRINCAR", "INÍCIO"))
+            ConversationReply("O cavalinho chegou pertinho e descobriu que eram vagalumes dançando! Quer outra história?", RobotMood.HAPPY, scene = VisualScene.EXCITED_FACE, choices = listOf("HISTÓRIA", "BRINCAR", "INÍCIO"))
         } else {
-            ConversationReply("A fadinha veio voando e os dois descobriram juntos um caminho cheio de flores. Fim! Quer outra?", RobotMood.HAPPY, scene = VisualScene.HAPPY_FACE, choices = listOf("HISTÓRIA", "BRINCAR", "INÍCIO"))
+            ConversationReply("A fadinha veio voando e os dois descobriram juntos um caminho cheio de flores. Quer outra?", RobotMood.HAPPY, scene = VisualScene.HAPPY_FACE, choices = listOf("HISTÓRIA", "BRINCAR", "INÍCIO"))
         }
     }
 
@@ -186,8 +179,7 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     }
 
     private fun feeling(value: String): ConversationReply {
-        mode = PlayMode.FEELINGS
-        currentEmotion = value
+        mode = PlayMode.FEELINGS; currentEmotion = value
         return when (value) {
             "FELIZ" -> { pending = PendingTurn.FEELING_REASON; ConversationReply("Que bom! O que deixou você feliz?", RobotMood.HAPPY, true, VisualScene.HAPPY_FACE, listOf("CONVERSAR", "BRINCAR")) }
             "TRISTE" -> { pending = PendingTurn.FEELING_REASON; ConversationReply("Entendi. Você está triste. O que aconteceu?", RobotMood.SAD, true, VisualScene.SAD_FACE, listOf("CONVERSAR", "BRINCAR"), parentAlert = "${profile.name} indicou que está triste.") }
@@ -214,23 +206,17 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
             }
         }
         PendingTurn.FALL_HURT -> when {
-            isYes(text) -> { pending = PendingTurn.HURT_WHERE; ConversationReply("Poxa. Onde está doendo?", RobotMood.SAD, true, choices = emptyList(), parentAlert = "${profile.name} disse que se machucou após uma queda.") }
-            isNo(text) -> { pending = PendingTurn.NONE; ConversationReply("Que bom. Se começar a doer, chama um adulto. Quer ficar comigo?", RobotMood.HAPPY, choices = listOf("BRINCAR", "HISTÓRIA", "INÍCIO")) }
+            isYes(text) -> { pending = PendingTurn.HURT_WHERE; ConversationReply("Poxa. Onde está doendo?", RobotMood.SAD, true, parentAlert = "${profile.name} disse que se machucou após uma queda.") }
+            isNo(text) -> { pending = PendingTurn.NONE; ConversationReply("Que bom. Se começar a doer, chama um adulto.", RobotMood.HAPPY, choices = listOf("BRINCAR", "HISTÓRIA", "INÍCIO")) }
             else -> ConversationReply("Você se machucou quando caiu?", RobotMood.CURIOUS, true, choices = listOf("SIM", "NÃO"))
         }
-        PendingTurn.HURT_WHERE -> {
-            pending = PendingTurn.NONE
-            ConversationReply("Entendi. Você disse que está doendo $original. Chama um adulto para olhar com você, combinado?", RobotMood.SAD, choices = listOf("CHAMAR ADULTO", "INÍCIO"), parentAlert = "${profile.name} relatou dor: \"$original\".")
-        }
+        PendingTurn.HURT_WHERE -> { pending = PendingTurn.NONE; ConversationReply("Entendi. Você disse que está doendo $original. Chama um adulto para olhar com você, combinado?", RobotMood.SAD, choices = listOf("CHAMAR ADULTO", "INÍCIO"), parentAlert = "${profile.name} relatou dor: \"$original\".") }
         PendingTurn.SAFETY_HURT -> when {
             isYes(text) -> { pending = PendingTurn.SAFETY_WHERE; ConversationReply("Tá bom. Onde está doendo?", RobotMood.SAD, true, parentAlert = "Após um relato de proteção, ${profile.name} respondeu que se machucou.") }
             isNo(text) -> { pending = PendingTurn.NONE; ConversationReply("Entendi. Eu deixei sua fala registrada. Fica perto de um adulto em quem você confia.", RobotMood.SAD, choices = listOf("CHAMAR ADULTO", "INÍCIO")) }
             else -> ConversationReply("Você se machucou? Está doendo em algum lugar?", RobotMood.SAD, true, choices = listOf("SIM", "NÃO"))
         }
-        PendingTurn.SAFETY_WHERE -> {
-            pending = PendingTurn.NONE
-            ConversationReply("Obrigada por me contar. Fica perto de um adulto em quem você confia enquanto isso fica registrado.", RobotMood.SAD, choices = listOf("CHAMAR ADULTO", "INÍCIO"), parentAlert = "Dor indicada após relato de proteção: \"$original\".")
-        }
+        PendingTurn.SAFETY_WHERE -> { pending = PendingTurn.NONE; ConversationReply("Obrigada por me contar. Fica perto de um adulto em quem você confia enquanto isso fica registrado.", RobotMood.SAD, choices = listOf("CHAMAR ADULTO", "INÍCIO"), parentAlert = "Dor indicada após relato de proteção: \"$original\".") }
         PendingTurn.STORY_CHOICE -> storyChoice(original.uppercase(Locale.forLanguageTag("pt-BR")))
     }
 
@@ -240,8 +226,7 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     }
 
     private fun routineStart(): ConversationReply {
-        mode = PlayMode.ROUTINE
-        routineStep = "comida"
+        mode = PlayMode.ROUTINE; routineStep = "comida"
         return ConversationReply("Vamos cuidar de você. Você já comeu?", RobotMood.CURIOUS, scene = VisualScene.FOOD, choices = listOf("SIM", "NÃO"))
     }
 
@@ -256,8 +241,8 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     }
 
     private fun bathroomPrompt(): ConversationReply {
-        mode = PlayMode.ROUTINE; routineStep = "banheiro"
-        return ConversationReply("Quer ir ao banheiro? Pode deixar o celular aqui. Eu espero você voltar.", RobotMood.HAPPY, scene = VisualScene.TOILET, choices = listOf("SIM", "NÃO"), waitForMovement = true)
+        mode = PlayMode.ROUTINE; routineStep = "banheiro_confirmar"
+        return ConversationReply("Claro! Você quer fazer xixi. Pode ir ao banheiro. Quer que eu espere você aqui?", RobotMood.HAPPY, scene = VisualScene.TOILET, choices = listOf("SIM", "NÃO"))
     }
 
     private fun toothbrushPrompt(): ConversationReply {
@@ -265,24 +250,28 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
         return ConversationReply("Hora de deixar os dentinhos limpinhos! Já escovou os dentes?", RobotMood.HAPPY, scene = VisualScene.TOOTHBRUSH, choices = listOf("SIM", "NÃO"))
     }
 
-    private fun routineChoice(choice: String): ConversationReply {
-        return when (routineStep) {
-            "comida" -> if (choice == "SIM") toothbrushPrompt() else ConversationReply("Então chama um adulto para ajudar você a comer. Depois a gente continua.", RobotMood.CURIOUS, scene = VisualScene.FOOD, choices = listOf("ÁGUA", "INÍCIO"))
-            "agua" -> if (choice == "SIM") ConversationReply("Ótimo! Bebe alguns golinhos. Seu corpo gosta de água.", RobotMood.PROUD, scene = VisualScene.WATER, choices = listOf("BANHEIRO", "INÍCIO")) else ConversationReply("Tudo bem. Quando sentir sede, me conta.", RobotMood.HAPPY, choices = listOf("BRINCAR", "INÍCIO"))
-            "dentes" -> if (choice == "SIM") ConversationReply("Muito bem! Dentinhos limpos!", RobotMood.PROUD, scene = VisualScene.TOOTHBRUSH, choices = listOf("ÁGUA", "BANHEIRO", "INÍCIO")) else ConversationReply("Vamos escovar com um adulto? Escova em cima, embaixo e bem devagar.", RobotMood.CURIOUS, scene = VisualScene.TOOTHBRUSH, choices = listOf("SIM", "INÍCIO"))
-            "banheiro" -> bathroomPrompt()
-            "maos" -> if (choice == "SIM") ConversationReply("Perfeito! Mãos limpinhas.", RobotMood.PROUD, scene = VisualScene.HANDS, choices = listOf("BRINCAR", "INÍCIO")) else ConversationReply("As bactérias são pequenininhas e a gente não vê. Lava com água e sabão e volta aqui.", RobotMood.CURIOUS, scene = VisualScene.BACTERIA, choices = listOf("SIM", "INÍCIO"))
-            else -> start(PlayMode.ROUTINE)
+    private fun routineChoice(choice: String): ConversationReply = when (routineStep) {
+        "comida" -> if (choice == "SIM") toothbrushPrompt() else ConversationReply("Então chama um adulto para ajudar você a comer. Depois a gente continua.", RobotMood.CURIOUS, scene = VisualScene.FOOD, choices = listOf("ÁGUA", "INÍCIO"))
+        "agua" -> if (choice == "SIM") ConversationReply("Ótimo! Bebe alguns golinhos. Seu corpo gosta de água.", RobotMood.PROUD, scene = VisualScene.WATER, choices = listOf("BANHEIRO", "INÍCIO")) else ConversationReply("Tudo bem. Quando sentir sede, me conta.", RobotMood.HAPPY, choices = listOf("BRINCAR", "INÍCIO"))
+        "dentes" -> if (choice == "SIM") ConversationReply("Muito bem! Dentinhos limpos!", RobotMood.PROUD, scene = VisualScene.TOOTHBRUSH, choices = listOf("ÁGUA", "BANHEIRO", "INÍCIO")) else ConversationReply("Vamos escovar com um adulto? Escova em cima, embaixo e bem devagar.", RobotMood.CURIOUS, scene = VisualScene.TOOTHBRUSH, choices = listOf("SIM", "INÍCIO"))
+        "banheiro_confirmar" -> if (choice == "SIM") {
+            routineStep = "banheiro_esperando"
+            ConversationReply("Pode ir. Deixa o celular aqui. Eu vou esperar você voltar e depois pergunto se lavou as mãos.", RobotMood.HAPPY, scene = VisualScene.TOILET, waitForMovement = true)
+        } else {
+            routineStep = ""
+            ConversationReply("Tudo bem. Quando precisar, é só me falar.", RobotMood.HAPPY, choices = listOf("BRINCAR", "INÍCIO"))
         }
+        "maos" -> if (choice == "SIM") ConversationReply("Perfeito! Mãos limpinhas.", RobotMood.PROUD, scene = VisualScene.HANDS, choices = listOf("BRINCAR", "INÍCIO")) else ConversationReply("As bactérias são pequenininhas e a gente não vê. Lava com água e sabão e volta aqui.", RobotMood.CURIOUS, scene = VisualScene.BACTERIA, choices = listOf("SIM", "INÍCIO"))
+        else -> start(PlayMode.ROUTINE)
     }
 
     private fun guidedFallback(): ConversationReply {
         pending = PendingTurn.NONE
         return if (fallbackCount <= 1) {
-            ConversationReply("Ainda não entendi direitinho. Você quer brincar, ver animais, ouvir uma história ou falar como está?", RobotMood.CURIOUS, choices = listOf("BRINCAR", "ANIMAIS", "HISTÓRIA", "CARINHAS", "ABC", "ROTINA"))
+            ConversationReply("Não entendi essa parte. Você pode dizer: quero brincar, quero fazer xixi, estou com sede, quero uma história ou quero ver animais.", RobotMood.CURIOUS, choices = listOf("BRINCAR", "ANIMAIS", "HISTÓRIA", "CARINHAS", "ABC", "ROTINA"))
         } else {
             fallbackCount = 0
-            ConversationReply("Vamos escolher tocando numa opção. Eu fico com você.", RobotMood.HAPPY, choices = listOf("ANIMAIS", "ABC", "HISTÓRIA", "CARINHAS", "ROTINA", "INÍCIO"))
+            ConversationReply("Vamos escolher uma coisa juntas.", RobotMood.HAPPY, choices = listOf("ANIMAIS", "ABC", "HISTÓRIA", "CARINHAS", "ROTINA", "INÍCIO"))
         }
     }
 
