@@ -3,7 +3,7 @@ package br.com.companheirofala
 import java.text.Normalizer
 import java.util.Locale
 
-enum class PlayMode { HOME, FEELINGS, LETTERS, ROUTINE, ANIMALS, STORY, PLAY, GUESS }
+enum class PlayMode { HOME, FEELINGS, LETTERS, ROUTINE, ANIMALS, STORY, PLAY, GUESS, MEMORY }
 
 data class ConversationReply(
     val text: String,
@@ -14,7 +14,8 @@ data class ConversationReply(
     val waitForMovement: Boolean = false,
     val parentAlert: String? = null,
     val playTune: Boolean = false,
-    val imageKey: String? = null
+    val imageKey: String? = null,
+    val memoryTiles: List<MemoryTile> = emptyList()
 )
 
 private enum class PendingTurn { NONE, FEELING_REASON, FALL_HURT, HURT_WHERE, SAFETY_HURT, SAFETY_WHERE, SCHOOL_HAPPENED, SCHOOL_KIND, SCHOOL_SAFETY, STORY_CHOICE }
@@ -34,6 +35,7 @@ class ConversationEngine(
     private var letterWord = "cavalo"
     private var letterAnswer = "C"
     private var guessIndex = 0
+    private var memoryGame: MemoryGame? = null
 
     private data class GuessRound(val word: String, val clue: String, val options: List<String>, val imageKey: String)
     private val guessRounds = listOf(
@@ -60,6 +62,7 @@ class ConversationEngine(
             PlayMode.STORY -> storyStart()
             PlayMode.PLAY -> playMenu()
             PlayMode.GUESS -> guessStart()
+            PlayMode.MEMORY -> memoryStart()
         }
     }
 
@@ -114,6 +117,7 @@ class ConversationEngine(
             c in setOf("FELIZ", "TRISTE", "BRAVA", "MEDO", "CANSADA", "ANIMADA") -> feeling(c)
             c == "BRINCAR" -> start(PlayMode.PLAY)
             c == "ADIVINHA" -> start(PlayMode.GUESS)
+            c == "MEMÓRIA" || c == "MEMORIA" -> start(PlayMode.MEMORY)
             c == "ANIMAIS" -> start(PlayMode.ANIMALS)
             c in setOf("ABC", "LETRAS") -> start(PlayMode.LETTERS)
             c == "HISTÓRIA" || c == "HISTORIA" -> start(PlayMode.STORY)
@@ -128,6 +132,7 @@ class ConversationEngine(
             c == "ÁGUA" || c == "AGUA" -> waterPrompt()
             c == "PRÓXIMA" && mode == PlayMode.GUESS -> nextGuess()
             c == "DE NOVO" && mode == PlayMode.GUESS -> guessStart()
+            c.startsWith("MEMORY_") && mode == PlayMode.MEMORY -> memoryTap(c.removePrefix("MEMORY_").toIntOrNull() ?: -1)
             mode == PlayMode.LETTERS && c.length == 1 -> letterChoice(c)
             mode == PlayMode.ANIMALS && c in setOf("CAVALO", "GATO", "CACHORRO") -> animalChoice(c)
             mode == PlayMode.GUESS && c in guessRounds[guessIndex].options -> guessChoice(c)
@@ -151,6 +156,7 @@ class ConversationEngine(
         containsAny(text, "dar mel", "mel pra fada", "mel para fada", "toma mel") -> ConversationReply("Que carinho! Obrigada pelo mel. Minha luz ficou ainda mais brilhante!", RobotMood.PROUD, scene = VisualScene.HAPPY_FACE, choices = listOf("BRINCAR", "MÚSICA", "IMAGENS"))
         containsAny(text, "quero brincar", "vamos brincar", "vamos de brincar", "brincar", "brinca", "jogar", "jogo", "quero jogo") -> start(PlayMode.PLAY)
         containsAny(text, "adivinha", "adivinhar", "faz adivinha", "quero adivinhar", "quem e", "quem é") -> start(PlayMode.GUESS)
+        containsAny(text, "jogo da memoria", "jogo de memoria", "memoria", "memória", "pares") -> start(PlayMode.MEMORY)
         containsAny(text, "conta uma historia", "quero historia", "vamos de historia", "historia", "historinha") -> start(PlayMode.STORY)
         containsAny(text, "quero ver animal", "quero bicho", "bichinho", "animal", "animais", "cavalo", "gato", "cachorro") -> start(PlayMode.ANIMALS)
         containsAny(text, "quero aprender", "letra", "abc", "alfabeto", "aprender") -> start(PlayMode.LETTERS)
@@ -173,7 +179,7 @@ class ConversationEngine(
     private fun home() = ConversationReply(
         "Oi, ${profile.name}! Quer brincar, ver figuras, ouvir uma musiquinha ou me contar uma coisa?",
         RobotMood.HAPPY,
-        choices = listOf("ADIVINHA", "IMAGENS", "MÚSICA", "ANIMAIS", "ABC", "HISTÓRIA")
+        choices = listOf("MEMÓRIA", "ADIVINHA", "IMAGENS", "MÚSICA", "ANIMAIS", "HISTÓRIA")
     )
 
     private fun vocabularyBoard() = ConversationReply(
@@ -192,7 +198,7 @@ class ConversationEngine(
     private fun playMenu() = ConversationReply(
         "Escolhe uma brincadeira! Quer adivinhar figuras, animais, letras ou uma historinha?",
         RobotMood.SURPRISED,
-        choices = listOf("ADIVINHA", "ANIMAIS", "ABC", "HISTÓRIA", "CARINHAS", "INÍCIO")
+        choices = listOf("MEMÓRIA", "ADIVINHA", "ANIMAIS", "HISTÓRIA", "CARINHAS", "INÍCIO")
     )
 
     private fun guessStart(): ConversationReply {
@@ -218,6 +224,23 @@ class ConversationEngine(
     private fun nextGuess(): ConversationReply {
         guessIndex = (guessIndex + 1) % guessRounds.size
         return guessStart()
+    }
+
+    private fun memoryStart(): ConversationReply {
+        mode = PlayMode.MEMORY
+        memoryGame = MemoryGame()
+        val move = memoryGame!!.start()
+        return ConversationReply(move.message, RobotMood.SURPRISED, memoryTiles = move.tiles)
+    }
+
+    private fun memoryTap(index: Int): ConversationReply {
+        val move = memoryGame?.tap(index) ?: return memoryStart()
+        return ConversationReply(
+            move.message,
+            if (move.complete) RobotMood.PROUD else RobotMood.CURIOUS,
+            memoryTiles = move.tiles,
+            choices = if (move.complete) listOf("MEMÓRIA", "BRINCAR", "INÍCIO") else emptyList()
+        )
     }
 
     /** Aprende preferências e nomes simples a partir de frases espontâneas. */

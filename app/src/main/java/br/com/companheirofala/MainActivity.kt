@@ -22,6 +22,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.widget.Button
 import android.widget.HorizontalScrollView
+import android.widget.GridLayout
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -42,6 +43,7 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var music: LocalMusicEngine
     private lateinit var vocabularyBoard: ImageView
     private lateinit var guessImage: ImageView
+    private lateinit var memoryGrid: GridLayout
 
     private val profile = ChildProfile.gabi()
     private lateinit var engine: ConversationEngine
@@ -174,6 +176,13 @@ class MainActivity : Activity(), SensorEventListener {
             visibility = View.GONE
         }
         fairyStage.addView(guessImage, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+        memoryGrid = GridLayout(this).apply {
+            columnCount = 3
+            rowCount = 3
+            visibility = View.GONE
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+        }
+        fairyStage.addView(memoryGrid, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
         root.addView(fairyStage, LinearLayout.LayoutParams(-1, dp(276)).apply { bottomMargin = dp(8) })
 
         visual = ChildVisualView(this).apply { visibility = View.GONE }
@@ -228,11 +237,14 @@ class MainActivity : Activity(), SensorEventListener {
         visual.showScene(reply.scene)
         val showVocabulary = reply.text.startsWith("Olha as figuras")
         val showGuess = reply.imageKey != null
+        val showMemory = reply.memoryTiles.isNotEmpty()
         vocabularyBoard.visibility = if (showVocabulary) View.VISIBLE else View.GONE
         guessImage.visibility = if (showGuess) View.VISIBLE else View.GONE
         if (showGuess) guessImage.setImageResource(resources.getIdentifier("word_${reply.imageKey}", "drawable", packageName))
-        fairy.visibility = if (showVocabulary || showGuess) View.GONE else View.VISIBLE
-        visual.visibility = if (reply.scene == VisualScene.NONE || showVocabulary || showGuess) View.GONE else View.VISIBLE
+        memoryGrid.visibility = if (showMemory) View.VISIBLE else View.GONE
+        if (showMemory) renderMemoryGrid(reply.memoryTiles)
+        fairy.visibility = if (showVocabulary || showGuess || showMemory) View.GONE else View.VISIBLE
+        visual.visibility = if (reply.scene == VisualScene.NONE || showVocabulary || showGuess || showMemory) View.GONE else View.VISIBLE
         waitingForMovement = reply.waitForMovement
         renderChoices(reply.choices)
         reply.parentAlert?.let { events.record("parent_alert", it, "child=${profile.name}") }
@@ -292,6 +304,32 @@ class MainActivity : Activity(), SensorEventListener {
                 events.record("choice", label)
                 engine.onChoice(label).also { reply -> renderReply(reply); speakReply(reply) }
             }
+        }
+    }
+
+    private fun renderMemoryGrid(tiles: List<MemoryTile>) {
+        memoryGrid.removeAllViews()
+        tiles.forEachIndexed { index, tile ->
+            val faceUp = tile.revealed || tile.matched
+            val card = ImageView(this).apply {
+                contentDescription = if (faceUp) "Bichinho revelado" else "Carta escondida"
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                background = roundedBackground(if (faceUp) Color.WHITE else Color.rgb(123, 78, 184), 22f)
+                setPadding(dp(3), dp(3), dp(3), dp(3))
+                if (faceUp) {
+                    val resource = if (tile.imageKey == "fairy") R.drawable.fairy_pet else resources.getIdentifier("word_${tile.imageKey}", "drawable", packageName)
+                    setImageResource(resource)
+                } else setImageResource(android.R.drawable.ic_menu_help)
+                setOnClickListener {
+                    touchInteraction()
+                    engine.onChoice("MEMORY_$index").also { reply -> renderReply(reply); speakReply(reply) }
+                }
+            }
+            memoryGrid.addView(card, GridLayout.LayoutParams(GridLayout.spec(index / 3, 1f), GridLayout.spec(index % 3, 1f)).apply {
+                width = 0
+                height = 0
+                setMargins(dp(4), dp(4), dp(4), dp(4))
+            })
         }
     }
 
@@ -407,6 +445,7 @@ class MainActivity : Activity(), SensorEventListener {
     private fun choiceSymbol(label: String) = when (label) {
         "BRINCAR" -> "🎲"
         "ADIVINHA" -> "🔎"
+        "MEMÓRIA", "MEMORIA" -> "🧠"
         "ANIMAIS" -> "🐴"
         "ABC", "LETRAS" -> "🔤"
         "HISTÓRIA", "HISTORIA" -> "📖"

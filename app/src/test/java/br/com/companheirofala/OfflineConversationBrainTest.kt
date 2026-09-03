@@ -69,4 +69,13 @@ class OfflineConversationBrainTest {
 
         assertTrue(recall.text.contains("morango"))
     }
+
+    @Test
+    fun memoryGameStartsWithNineCardsAndAsksForMatchingAnimal() {
+        val game = engine.onChoice("MEMÓRIA")
+        val first = engine.onChoice("MEMORY_0")
+
+        assertTrue(game.memoryTiles.size == 9)
+        assertTrue(first.text.contains("Onde está o outro macaco"))
+    }
 }
