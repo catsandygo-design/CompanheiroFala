@@ -21,7 +21,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
 import android.widget.Button
-import android.widget.GridLayout
+import android.widget.HorizontalScrollView
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -32,7 +32,7 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var fairy: ImageView
     private lateinit var visual: ChildVisualView
     private lateinit var speechBubble: TextView
-    private lateinit var choices: GridLayout
+    private lateinit var choices: LinearLayout
     private lateinit var status: TextView
     private lateinit var updater: AppUpdater
     private lateinit var voice: VoiceEngine
@@ -44,7 +44,7 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var guessImage: ImageView
 
     private val profile = ChildProfile.gabi()
-    private val engine = ConversationEngine(profile)
+    private lateinit var engine: ConversationEngine
     private val handler = Handler(Looper.getMainLooper())
     private var waitingForMovement = false
     private var autoListenAfterSpeech = false
@@ -80,6 +80,7 @@ class MainActivity : Activity(), SensorEventListener {
         events = ParentEventRepository(this)
         tracker = DevelopmentTracker(this)
         music = LocalMusicEngine()
+        engine = ConversationEngine(profile, LocalChildMemory(this))
 
         speech = SpeechEngine(
             context = this,
@@ -146,12 +147,13 @@ class MainActivity : Activity(), SensorEventListener {
         }, LinearLayout.LayoutParams(-1, dp(30)))
 
         val fairyStage = FrameLayout(this).apply {
-            background = roundedBackground(Color.argb(72, 255, 255, 255), 36f)
-            setPadding(dp(10), dp(4), dp(10), dp(4))
+            background = roundedBackground(Color.argb(115, 255, 255, 255), 44f)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
         }
         fairy = ImageView(this).apply {
             setImageResource(R.drawable.fairy_pet)
-            scaleType = ImageView.ScaleType.CENTER_CROP
+            // FIT_CENTER preserva o corpo, asas e cauda inteiros da Lumi.
+            scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = false
             contentDescription = "Lumi, a fadinha companheira"
             clipToOutline = false
@@ -172,7 +174,7 @@ class MainActivity : Activity(), SensorEventListener {
             visibility = View.GONE
         }
         fairyStage.addView(guessImage, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
-        root.addView(fairyStage, LinearLayout.LayoutParams(-1, dp(238)).apply { bottomMargin = dp(8) })
+        root.addView(fairyStage, LinearLayout.LayoutParams(-1, dp(276)).apply { bottomMargin = dp(8) })
 
         visual = ChildVisualView(this).apply { visibility = View.GONE }
         root.addView(visual, LinearLayout.LayoutParams(-1, dp(126)).apply { bottomMargin = dp(7) })
@@ -189,13 +191,15 @@ class MainActivity : Activity(), SensorEventListener {
         }
         root.addView(speechBubble, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
 
-        choices = GridLayout(this).apply {
-            columnCount = 3
-            rowCount = 2
-            alignmentMode = GridLayout.ALIGN_BOUNDS
-            setPadding(0, dp(3), 0, dp(3))
+        choices = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(4), dp(4), dp(4))
         }
-        root.addView(choices, LinearLayout.LayoutParams(-1, dp(148)))
+        root.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(choices)
+        }, LinearLayout.LayoutParams(-1, dp(118)))
 
         status = TextView(this).apply {
             text = "Toque na Lumi ou no microfone e fale"
@@ -247,10 +251,8 @@ class MainActivity : Activity(), SensorEventListener {
         val visible = items.take(6)
         visible.forEachIndexed { index, label ->
             val card = choiceCard(label)
-            choices.addView(card, GridLayout.LayoutParams(GridLayout.spec(index / 3, 1f), GridLayout.spec(index % 3, 1f)).apply {
-                width = 0
-                height = if (visible.size > 3) dp(66) else dp(86)
-                setMargins(dp(3), dp(3), dp(3), dp(3))
+            choices.addView(card, LinearLayout.LayoutParams(dp(104), -1).apply {
+                setMargins(dp(5), 0, dp(5), 0)
             })
         }
     }
@@ -262,7 +264,8 @@ class MainActivity : Activity(), SensorEventListener {
             gravity = Gravity.CENTER
             contentDescription = label
             background = roundedBackground(choiceColor(label), 24f)
-            setPadding(dp(3), dp(2), dp(3), dp(2))
+            elevation = dp(4).toFloat()
+            setPadding(dp(4), dp(4), dp(4), dp(4))
             if (wordAsset != null) {
                 addView(ImageView(this@MainActivity).apply {
                     setImageResource(resources.getIdentifier("word_$wordAsset", "drawable", packageName))
@@ -385,13 +388,13 @@ class MainActivity : Activity(), SensorEventListener {
     }
 
     private fun startFairyIdleAnimation() {
-        val floatUpAndDown = ObjectAnimator.ofFloat(fairy, View.TRANSLATION_Y, 0f, -dp(7).toFloat(), 0f).apply {
-            duration = 2100L
+        val floatUpAndDown = ObjectAnimator.ofFloat(fairy, View.TRANSLATION_Y, 0f, -dp(12).toFloat(), 0f, -dp(5).toFloat(), 0f).apply {
+            duration = 2600L
             repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.RESTART
         }
-        val gentleWiggle = ObjectAnimator.ofFloat(fairy, View.ROTATION, -1.1f, 1.1f, -1.1f).apply {
-            duration = 3100L
+        val gentleWiggle = ObjectAnimator.ofFloat(fairy, View.ROTATION, -2.2f, 2.2f, -2.2f).apply {
+            duration = 3400L
             repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.REVERSE
         }

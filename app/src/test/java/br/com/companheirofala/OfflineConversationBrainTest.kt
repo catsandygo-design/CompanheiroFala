@@ -61,4 +61,12 @@ class OfflineConversationBrainTest {
         assertTrue(question.imageKey == "horse")
         assertTrue(answer.text.contains("Acertou"))
     }
+
+    @Test
+    fun remembersChildPreferenceDuringConversation() {
+        engine.reply("Eu gosto de morango")
+        val recall = engine.reply("Do que eu gosto?")
+
+        assertTrue(recall.text.contains("morango"))
+    }
 }

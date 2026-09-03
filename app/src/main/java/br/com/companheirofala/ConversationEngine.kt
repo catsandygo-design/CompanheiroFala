@@ -19,7 +19,10 @@ data class ConversationReply(
 
 private enum class PendingTurn { NONE, FEELING_REASON, FALL_HURT, HURT_WHERE, SAFETY_HURT, SAFETY_WHERE, SCHOOL_HAPPENED, SCHOOL_KIND, SCHOOL_SAFETY, STORY_CHOICE }
 
-class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()) {
+class ConversationEngine(
+    private val profile: ChildProfile = ChildProfile.gabi(),
+    private val memory: ChildMemory = SessionChildMemory()
+) {
     private val safety = SafetyEngine(profile)
     private val offlineBrain = OfflineConversationBrain(profile)
     private var mode = PlayMode.HOME
@@ -65,6 +68,7 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
         val text = normalize(original)
         if (text.isBlank()) return guidedFallback()
         lastChildUtterance = original
+        memory.rememberUtterance(original)
 
         safety.inspect(original).takeIf { it.triggered }?.let { decision ->
             pending = if (decision.askIfHurt) PendingTurn.SAFETY_HURT else PendingTurn.NONE
@@ -79,6 +83,8 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
         }
 
         handlePending(text, original)?.let { return it }
+
+        personalMemoryReply(text, original)?.let { return it }
 
         // Pergunta concreta, uma etapa por vez. "Como foi a escola?" costuma
         // gerar respostas pouco específicas; esta sequência aceita também
@@ -140,13 +146,13 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
 
     private fun detectCommand(text: String): ConversationReply? = when {
         containsAny(text, "oi", "ola", "bom dia", "boa tarde", "boa noite") -> home()
-        containsAny(text, "papai chegou", "pai chegou", "papai chego", "pai chego") -> ConversationReply("O papai chegou! Vai lá dar um abraço nele. Depois você pode voltar para me contar.", RobotMood.HAPPY, choices = listOf("INÍCIO", "BRINCAR"))
+        containsAny(text, "papai chegou", "pai chegou", "papai chego", "pai chego", "meu pai chegou") -> ConversationReply("O papai chegou! Vai lá dar um abraço nele. Depois você pode voltar para me contar.", RobotMood.HAPPY, choices = listOf("INÍCIO", "BRINCAR"))
         containsAny(text, "onde voce", "cade voce", "cadê voce", "onde esta a fada") -> ConversationReply("Eu estou aqui na tela, pertinho de você. Toca em mim quando quiser conversar.", RobotMood.HAPPY, choices = listOf("BRINCAR", "MÚSICA", "IMAGENS"))
         containsAny(text, "dar mel", "mel pra fada", "mel para fada", "toma mel") -> ConversationReply("Que carinho! Obrigada pelo mel. Minha luz ficou ainda mais brilhante!", RobotMood.PROUD, scene = VisualScene.HAPPY_FACE, choices = listOf("BRINCAR", "MÚSICA", "IMAGENS"))
-        containsAny(text, "quero brincar", "vamos brincar", "brincar", "brinca", "jogar", "jogo") -> start(PlayMode.PLAY)
-        containsAny(text, "adivinha", "adivinhar", "quem e", "quem é") -> start(PlayMode.GUESS)
-        containsAny(text, "conta uma historia", "quero historia", "historia", "historinha") -> start(PlayMode.STORY)
-        containsAny(text, "quero ver animal", "animal", "animais", "cavalo", "gato", "cachorro") -> start(PlayMode.ANIMALS)
+        containsAny(text, "quero brincar", "vamos brincar", "vamos de brincar", "brincar", "brinca", "jogar", "jogo", "quero jogo") -> start(PlayMode.PLAY)
+        containsAny(text, "adivinha", "adivinhar", "faz adivinha", "quero adivinhar", "quem e", "quem é") -> start(PlayMode.GUESS)
+        containsAny(text, "conta uma historia", "quero historia", "vamos de historia", "historia", "historinha") -> start(PlayMode.STORY)
+        containsAny(text, "quero ver animal", "quero bicho", "bichinho", "animal", "animais", "cavalo", "gato", "cachorro") -> start(PlayMode.ANIMALS)
         containsAny(text, "quero aprender", "letra", "abc", "alfabeto", "aprender") -> start(PlayMode.LETTERS)
         containsAny(text, "carinha", "sentimento", "emocao") -> start(PlayMode.FEELINGS)
         containsAny(text, "triste", "chateada") -> feeling("TRISTE")
@@ -212,6 +218,33 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     private fun nextGuess(): ConversationReply {
         guessIndex = (guessIndex + 1) % guessRounds.size
         return guessStart()
+    }
+
+    /** Aprende preferências e nomes simples a partir de frases espontâneas. */
+    private fun personalMemoryReply(text: String, original: String): ConversationReply? {
+        val favoriteQuestion = containsAny(text, "do que eu gosto", "qual eu gosto", "meu favorito", "minha favorita")
+        if (favoriteQuestion) {
+            val favorite = memory.read("favorite")
+            return if (favorite != null) ConversationReply("Eu lembro: você gosta de $favorite. Quer me contar mais uma coisa que você gosta?", RobotMood.PROUD, keepListening = true, choices = listOf("BRINCAR", "IMAGENS", "MÚSICA"))
+            else ConversationReply("Ainda não sei. Você pode dizer: eu gosto de cavalo, música ou morango.", RobotMood.CURIOUS, keepListening = true, choices = listOf("CAVALO", "MORANGO", "MÚSICA"))
+        }
+
+        val favorite = Regex("(?:eu gosto de|eu adoro|meu favorito e|minha favorita e)\\s+(.+)").find(text)?.groupValues?.getOrNull(1)
+        if (!favorite.isNullOrBlank() && !containsAny(favorite, "voce", "fadinha", "lumi")) {
+            memory.save("favorite", favorite)
+            return ConversationReply("Vou lembrar que você gosta de $favorite. Que legal! Quer brincar com isso ou me contar mais?", RobotMood.PROUD, keepListening = true, choices = listOf("BRINCAR", "IMAGENS", "CONVERSAR"))
+        }
+
+        val friend = Regex("(?:meu amigo chama|minha amiga chama|meu coleguinha chama|minha coleguinha chama)\\s+(.+)").find(text)?.groupValues?.getOrNull(1)
+        if (!friend.isNullOrBlank()) {
+            memory.save("friend", friend)
+            return ConversationReply("Vou lembrar que ${friend} é seu coleguinha. O que vocês fizeram juntos?", RobotMood.HAPPY, keepListening = true, choices = listOf("BRINQUEI", "CONVERSEI", "QUERO CONTAR"))
+        }
+
+        if (containsAny(text, "nome do meu amigo", "nome da minha amiga", "meu coleguinha")) {
+            memory.read("friend")?.let { return ConversationReply("Eu lembro que seu coleguinha chama $it.", RobotMood.HAPPY, choices = listOf("BRINCAR", "IMAGENS", "INÍCIO")) }
+        }
+        return null
     }
 
     private fun animalGame(): ConversationReply {
