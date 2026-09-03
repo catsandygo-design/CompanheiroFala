@@ -19,6 +19,7 @@ private enum class PendingTurn { NONE, FEELING_REASON, FALL_HURT, HURT_WHERE, SA
 
 class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()) {
     private val safety = SafetyEngine(profile)
+    private val offlineBrain = OfflineConversationBrain(profile)
     private var mode = PlayMode.HOME
     private var pending = PendingTurn.NONE
     private var currentEmotion: String? = null
@@ -68,6 +69,10 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
         }
 
         handlePending(text, original)?.let { return it }
+        offlineBrain.reply(original)?.let {
+            fallbackCount = 0
+            return it
+        }
         fallbackCount++
         return guidedFallback()
     }
