@@ -3,6 +3,19 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val restoreFairyImage = tasks.register("restoreFairyImage") {
+    doLast {
+        val drawableDir = file("src/main/res/drawable")
+        val payload = File(drawableDir, "fairy_companion_base64.txt")
+        val output = File(drawableDir, "fairy_companion.jpg")
+        if (payload.exists()) {
+            output.writeBytes(java.util.Base64.getMimeDecoder().decode(payload.readText().trim()))
+            payload.delete()
+        }
+        File(drawableDir, "README_FAIRY.txt").delete()
+    }
+}
+
 android {
     namespace = "br.com.companheirofala"
     compileSdk = 36
@@ -11,9 +24,9 @@ android {
         create("prototypeRelease") {
             val storePath = System.getenv("SIGNING_STORE_FILE")
             if (!storePath.isNullOrBlank()) storeFile = file(storePath)
-            storePassword = System.getenv("SIGNING_STORE_PASSWORD") ?: "companheiro123"
+            storePassword = System.getenv("SIGNING_STORE_PASSWORD") ?: ""
             keyAlias = System.getenv("SIGNING_KEY_ALIAS") ?: "companheiro"
-            keyPassword = System.getenv("SIGNING_KEY_PASSWORD") ?: "companheiro123"
+            keyPassword = System.getenv("SIGNING_KEY_PASSWORD") ?: ""
         }
     }
 
@@ -21,8 +34,8 @@ android {
         applicationId = "br.com.companheirofala"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.10.0"
+        versionCode = 11
+        versionName = "0.11.0"
     }
 
     buildTypes {
@@ -37,4 +50,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+}
+
+tasks.named("preBuild") {
+    dependsOn(restoreFairyImage)
 }
