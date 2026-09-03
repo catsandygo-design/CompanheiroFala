@@ -62,14 +62,18 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
             )
         }
 
-        detectCommand(text)?.let {
-            pending = PendingTurn.NONE
+        handlePending(text, original)?.let { return it }
+
+        // Frases de conversa livre (escola, família, afeto e aprendizagem)
+        // têm prioridade sobre atalhos genéricos, como "brincar", mas nunca
+        // interrompem uma pergunta que já está em andamento.
+        offlineBrain.reply(original)?.let {
             fallbackCount = 0
             return it
         }
 
-        handlePending(text, original)?.let { return it }
-        offlineBrain.reply(original)?.let {
+        detectCommand(text)?.let {
+            pending = PendingTurn.NONE
             fallbackCount = 0
             return it
         }
