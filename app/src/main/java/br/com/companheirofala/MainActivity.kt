@@ -25,7 +25,7 @@ class MainActivity : Activity(), SensorEventListener {
         val intro=engine.start(PlayMode.HOME);renderReply(intro);speakReply(intro);status.postDelayed({updater.checkAndUpdate{m->status.text=m}},1400)}
 
     private fun buildScreen():View{val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(10),dp(6),dp(10),dp(8));background=GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,intArrayOf(Color.rgb(92,55,139),Color.rgb(236,126,183),Color.rgb(105,193,221)))}
-        root.addView(TextView(this).apply{text="MEU CORAÇÃO • v0.9";textSize=13f;setTextColor(Color.WHITE);gravity=Gravity.CENTER;setTypeface(typeface,1)},LinearLayout.LayoutParams(-1,dp(26)))
+        root.addView(TextView(this).apply{text="MEU CORAÇÃO • v0.10";textSize=13f;setTextColor(Color.WHITE);gravity=Gravity.CENTER;setTypeface(typeface,1)},LinearLayout.LayoutParams(-1,dp(26)))
         fairy=FairyCompanionView(this);root.addView(fairy,LinearLayout.LayoutParams(-1,0,1.65f))
         visual=ChildVisualView(this);root.addView(visual,LinearLayout.LayoutParams(-1,0,2.15f).apply{topMargin=dp(5);bottomMargin=dp(6)})
         speechBubble=TextView(this).apply{textSize=18f;setTextColor(Color.rgb(72,42,94));gravity=Gravity.CENTER;setTypeface(typeface,1);setPadding(dp(16),dp(10),dp(16),dp(10));background=roundedBackground(Color.rgb(255,245,252),26f)};root.addView(speechBubble,LinearLayout.LayoutParams(-1,0,1.05f))
