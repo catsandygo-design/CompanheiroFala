@@ -1,19 +1,6 @@
-import java.util.Base64
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-}
-
-val restoreFairyImage = tasks.register("restoreFairyImage") {
-    doLast {
-        val drawableDir = file("src/main/res/drawable")
-        val payload = File(drawableDir, "fairy_companion_base64.txt")
-        val output = File(drawableDir, "fairy_companion.jpg")
-        if (payload.exists()) {
-            output.writeBytes(Base64.getMimeDecoder().decode(payload.readText().trim()))
-        }
-    }
 }
 
 android {
@@ -34,8 +21,8 @@ android {
         applicationId = "br.com.companheirofala"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.11.0"
+        versionCode = 12
+        versionName = "0.12.0"
     }
 
     buildTypes {
@@ -50,8 +37,4 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-}
-
-tasks.named("preBuild") {
-    dependsOn(restoreFairyImage)
 }
