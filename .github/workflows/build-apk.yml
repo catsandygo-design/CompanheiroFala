@@ -39,6 +39,9 @@ jobs:
       - name: Build debug APK for testing
         run: gradle :app:assembleDebug
 
+      - name: Test offline conversation engine
+        run: gradle :app:testDebugUnitTest
+
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
