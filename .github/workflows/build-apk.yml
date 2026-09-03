@@ -17,7 +17,6 @@ env:
   SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
   SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
   SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-  AI_BACKEND_URL: ${{ secrets.AI_BACKEND_URL }}
 
 jobs:
   build:
@@ -38,7 +37,7 @@ jobs:
           gradle-version: "8.13"
 
       - name: Build debug APK for testing
-        run: gradle :app:assembleDebug -PbackendUrl="$AI_BACKEND_URL"
+        run: gradle :app:assembleDebug
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
@@ -55,7 +54,7 @@ jobs:
         if: env.SIGNING_KEYSTORE_BASE64 != ''
         env:
           SIGNING_STORE_FILE: ${{ runner.temp }}/companheiro-release.jks
-        run: gradle :app:assembleRelease -PbackendUrl="$AI_BACKEND_URL"
+        run: gradle :app:assembleRelease
 
       - name: Prepare signed APK
         if: env.SIGNING_KEYSTORE_BASE64 != ''
