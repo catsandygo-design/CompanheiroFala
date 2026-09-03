@@ -12,6 +12,8 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
@@ -31,63 +33,268 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var voice: VoiceEngine
     private lateinit var speech: SpeechEngine
     private lateinit var events: ParentEventRepository
+    private lateinit var tracker: DevelopmentTracker
+
     private val profile = ChildProfile.gabi()
     private val engine = ConversationEngine(profile)
+    private val handler = Handler(Looper.getMainLooper())
     private var waitingForMovement = false
     private var autoListenAfterSpeech = false
     private var baselineAcceleration = 0f
     private var lastMovementAt = 0L
+    private var lastInteractionAt = System.currentTimeMillis()
     private var sensorManager: SensorManager? = null
+
+    private val proactivePrompt = object : Runnable {
+        override fun run() {
+            val quietFor = System.currentTimeMillis() - lastInteractionAt
+            if (quietFor >= 90_000L && !waitingForMovement) {
+                val prompt = ConversationReply(
+                    "${profile.name}, eu estou aqui. Quer brincar de animais, ouvir uma história ou beber um pouquinho de água?",
+                    RobotMood.CURIOUS,
+                    scene = VisualScene.HAPPY_FACE,
+                    choices = listOf("ANIMAIS", "HISTÓRIA", "ÁGUA", "ABC", "CARINHAS", "INÍCIO")
+                )
+                renderReply(prompt)
+                speakReply(prompt)
+                lastInteractionAt = System.currentTimeMillis()
+            }
+            handler.postDelayed(this, 30_000L)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildScreen())
-        updater = AppUpdater(this); events = ParentEventRepository(this)
-        speech = SpeechEngine(this,
-            onState = { s -> runOnUiThread { renderInteractionState(s) } },
-            onLevel = { l -> runOnUiThread { fairy.setVoiceLevel(l) } },
-            onResult = { t -> runOnUiThread { handleSpoken(t) } },
-            onFailure = { runOnUiThread { status.text = "Não ouvi. Toca na estrela e fala de novo." } })
-        voice = VoiceEngine(this,
+        updater = AppUpdater(this)
+        events = ParentEventRepository(this)
+        tracker = DevelopmentTracker(this)
+
+        speech = SpeechEngine(
+            context = this,
+            onState = { state -> runOnUiThread { renderInteractionState(state) } },
+            onLevel = { level -> runOnUiThread { fairy.setVoiceLevel(level) } },
+            onResult = { text -> runOnUiThread { handleSpoken(text) } },
+            onFailure = { runOnUiThread { status.text = "Não ouvi direitinho. Toca na estrela e fala de novo." } }
+        )
+        voice = VoiceEngine(
+            context = this,
             onStart = { runOnUiThread { speech.markSpeaking(); fairy.setMood(RobotMood.SPEAKING) } },
-            onDone = { runOnUiThread { speech.markIdle(); fairy.setMood(RobotMood.HAPPY); if (autoListenAfterSpeech && !waitingForMovement) { autoListenAfterSpeech=false; status.postDelayed({startListening()},450) } } },
-            onError = { runOnUiThread { speech.markIdle(); status.text="A voz não está disponível." } })
+            onDone = {
+                runOnUiThread {
+                    speech.markIdle()
+                    fairy.setMood(RobotMood.HAPPY)
+                    if (autoListenAfterSpeech && !waitingForMovement) {
+                        autoListenAfterSpeech = false
+                        status.postDelayed({ startListening() }, 450)
+                    }
+                }
+            },
+            onError = { runOnUiThread { speech.markIdle(); status.text = "A voz não está disponível neste aparelho." } }
+        )
+
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let { sensorManager?.registerListener(this,it,SensorManager.SENSOR_DELAY_NORMAL) }
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),10)
-        val intro=engine.start(PlayMode.HOME); renderReply(intro); speakReply(intro)
-        status.postDelayed({updater.checkAndUpdate { m->status.text=m }},1400)
+        sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
+            sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 10)
+        }
+
+        val intro = engine.start(PlayMode.HOME)
+        renderReply(intro)
+        speakReply(intro)
+        handler.postDelayed(proactivePrompt, 30_000L)
+        status.postDelayed({ updater.checkAndUpdate { message -> status.text = message } }, 1400)
     }
 
     private fun buildScreen(): View {
-        val root=LinearLayout(this).apply {
-            orientation=LinearLayout.VERTICAL
-            setPadding(dp(10),dp(6),dp(10),dp(12))
-            background=GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,intArrayOf(Color.rgb(47,91,80),Color.rgb(103,160,128),Color.rgb(235,185,211)))
-            setOnApplyWindowInsetsListener { v,i -> val b=i.getInsets(WindowInsets.Type.navigationBars()).bottom; v.setPadding(dp(10),dp(6),dp(10),dp(12)+b); i }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(12))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(Color.rgb(45, 84, 75), Color.rgb(102, 158, 126), Color.rgb(238, 187, 214))
+            )
+            setOnApplyWindowInsetsListener { v, insets ->
+                val bottom = insets.getInsets(WindowInsets.Type.navigationBars()).bottom
+                v.setPadding(dp(10), dp(8), dp(10), dp(12) + bottom)
+                insets
+            }
         }
-        root.addView(TextView(this).apply { text="MEU CORAÇÃO • v0.12"; textSize=13f; setTextColor(Color.WHITE); gravity=Gravity.CENTER; setTypeface(typeface,Typeface.BOLD) },LinearLayout.LayoutParams(-1,dp(26)))
-        fairy=FairyPortraitView(this); root.addView(fairy,LinearLayout.LayoutParams(-1,0,1.65f).apply{bottomMargin=dp(6)})
-        visual=ChildVisualView(this); root.addView(visual,LinearLayout.LayoutParams(-1,0,1.25f).apply{bottomMargin=dp(6)})
-        speechBubble=TextView(this).apply { textSize=17f; setTextColor(Color.rgb(57,41,67)); gravity=Gravity.CENTER; setTypeface(typeface,Typeface.BOLD); setPadding(dp(14),dp(10),dp(14),dp(10)); background=roundedBackground(Color.rgb(255,248,252),24f) }
-        root.addView(speechBubble,LinearLayout.LayoutParams(-1,0,.82f))
-        choices=GridLayout(this).apply{columnCount=3;rowCount=2;alignmentMode=GridLayout.ALIGN_BOUNDS;setPadding(0,dp(3),0,dp(3))}; root.addView(choices,LinearLayout.LayoutParams(-1,dp(116)))
-        status=TextView(this).apply{text="Sua vez";textSize=12f;setTextColor(Color.WHITE);gravity=Gravity.CENTER};root.addView(status,LinearLayout.LayoutParams(-1,dp(22)))
-        root.addView(Button(this).apply{text="★  FALAR COM A FADA  ★";textSize=17f;isAllCaps=false;setTextColor(Color.WHITE);setTypeface(typeface,Typeface.BOLD);background=roundedBackground(Color.rgb(118,75,164),30f);setOnClickListener{startListening()}},LinearLayout.LayoutParams(-1,dp(58)))
+
+        root.addView(TextView(this).apply {
+            text = "MEU CORAÇÃO • v0.13"
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setTypeface(typeface, Typeface.BOLD)
+        }, LinearLayout.LayoutParams(-1, dp(26)))
+
+        fairy = FairyPortraitView(this)
+        root.addView(fairy, LinearLayout.LayoutParams(-1, dp(245)).apply { bottomMargin = dp(7) })
+
+        visual = ChildVisualView(this).apply { visibility = View.GONE }
+        root.addView(visual, LinearLayout.LayoutParams(-1, dp(132)).apply { bottomMargin = dp(7) })
+
+        speechBubble = TextView(this).apply {
+            textSize = 17f
+            setTextColor(Color.rgb(57, 41, 67))
+            gravity = Gravity.CENTER
+            minHeight = dp(82)
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = roundedBackground(Color.rgb(255, 248, 252), 24f)
+        }
+        root.addView(speechBubble, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
+
+        choices = GridLayout(this).apply {
+            columnCount = 3
+            rowCount = 2
+            alignmentMode = GridLayout.ALIGN_BOUNDS
+            setPadding(0, dp(3), 0, dp(3))
+        }
+        root.addView(choices, LinearLayout.LayoutParams(-1, dp(116)))
+
+        status = TextView(this).apply {
+            text = "Sua vez"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+        }
+        root.addView(status, LinearLayout.LayoutParams(-1, dp(22)))
+
+        root.addView(Button(this).apply {
+            text = "★  FALAR COM A FADA  ★"
+            textSize = 17f
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            background = roundedBackground(Color.rgb(118, 75, 164), 30f)
+            setOnClickListener { touchInteraction(); startListening() }
+        }, LinearLayout.LayoutParams(-1, dp(58)))
+
         return root
     }
 
-    private fun renderReply(r:ConversationReply){ speechBubble.text=r.text; fairy.setMood(r.mood); visual.setScene(r.scene); visual.visibility=if(r.scene==VisualScene.NONE) View.GONE else View.VISIBLE; waitingForMovement=r.waitForMovement; renderChoices(r.choices); r.parentAlert?.let{events.record("emotion_alert",it,"child=${profile.name}")}; status.text=if(r.waitForMovement)"A fadinha espera você voltar" else "Sua vez" }
-    private fun speakReply(r:ConversationReply){speech.cancel();autoListenAfterSpeech=r.keepListening;voice.speak(r.text)}
-    private fun renderChoices(items:List<String>){choices.removeAllViews();items.take(6).forEachIndexed{index,label->val b=Button(this).apply{text=label;textSize=if(label.length<=2)28f else 13f;isAllCaps=false;setTextColor(Color.WHITE);setTypeface(typeface,Typeface.BOLD);background=roundedBackground(choiceColor(label),22f);setOnClickListener{if(label=="CONVERSAR"){startListening()}else{events.record("choice",label);engine.onChoice(label).also{r->renderReply(r);speakReply(r)}}}};choices.addView(b,GridLayout.LayoutParams(GridLayout.spec(index/3,1f),GridLayout.spec(index%3,1f)).apply{width=0;height=if(items.size>3)dp(52)else dp(68);setMargins(dp(3),dp(3),dp(3),dp(3))})}}
-    private fun handleSpoken(t:String){events.record("speech",t);engine.reply(t).also{renderReply(it);speakReply(it)}}
-    private fun startListening(){if(waitingForMovement)return;if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),10);return};voice.stop();if(!speech.startListening())status.text="Só um instantinho..."}
-    private fun renderInteractionState(s:InteractionState){status.text=when(s){InteractionState.IDLE->"Sua vez";InteractionState.SPEAKING->"A fadinha está falando";InteractionState.WAITING->"Já vou te ouvir";InteractionState.LISTENING->"A fadinha está ouvindo você";InteractionState.PROCESSING->"Pensando no que você falou"};if(s==InteractionState.LISTENING)fairy.setMood(RobotMood.LISTENING)}
-    override fun onSensorChanged(e:SensorEvent?){if(!waitingForMovement||e?.sensor?.type!=Sensor.TYPE_ACCELEROMETER)return;val total=abs(e.values[0])+abs(e.values[1])+abs(e.values[2]);if(baselineAcceleration==0f)baselineAcceleration=total;val now=System.currentTimeMillis();if(abs(total-baselineAcceleration)>5.5f&&now-lastMovementAt>2500){lastMovementAt=now;waitingForMovement=false;engine.onMovementDetected().also{renderReply(it);speakReply(it)}};baselineAcceleration=total}
-    override fun onAccuracyChanged(sensor:Sensor?,accuracy:Int)=Unit
-    override fun onResume(){super.onResume();if(::updater.isInitialized)updater.onResume()}
-    private fun choiceColor(l:String)=when(l){"A","FELIZ","ANIMADA"->Color.rgb(244,170,73);"C","SIM"->Color.rgb(72,185,133);"P","NÃO","TRISTE"->Color.rgb(78,150,226);"BRAVA"->Color.rgb(232,105,105);"MEDO"->Color.rgb(151,104,211);else->Color.rgb(142,91,190)}
-    private fun roundedBackground(c:Int,r:Float)=GradientDrawable().apply{setColor(c);cornerRadius=dp(r.toInt()).toFloat()}
-    private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
-    override fun onDestroy(){sensorManager?.unregisterListener(this);if(::speech.isInitialized)speech.destroy();if(::voice.isInitialized)voice.shutdown();super.onDestroy()}
+    private fun renderReply(reply: ConversationReply) {
+        speechBubble.text = reply.text
+        fairy.setMood(reply.mood)
+        visual.showScene(reply.scene)
+        visual.visibility = if (reply.scene == VisualScene.NONE) View.GONE else View.VISIBLE
+        waitingForMovement = reply.waitForMovement
+        renderChoices(reply.choices)
+        reply.parentAlert?.let { events.record("parent_alert", it, "child=${profile.name}") }
+        status.text = if (reply.waitForMovement) "A fadinha espera você voltar" else "Sua vez"
+    }
+
+    private fun speakReply(reply: ConversationReply) {
+        speech.cancel()
+        autoListenAfterSpeech = reply.keepListening
+        voice.speak(reply.text)
+    }
+
+    private fun renderChoices(items: List<String>) {
+        choices.removeAllViews()
+        val visible = items.take(6)
+        visible.forEachIndexed { index, label ->
+            val button = Button(this).apply {
+                text = label
+                textSize = if (label.length <= 2) 28f else 13f
+                isAllCaps = false
+                setTextColor(Color.WHITE)
+                setTypeface(typeface, Typeface.BOLD)
+                background = roundedBackground(choiceColor(label), 22f)
+                setOnClickListener {
+                    touchInteraction()
+                    tracker.recordChoice(label)
+                    events.record("choice", label)
+                    engine.onChoice(label).also { reply -> renderReply(reply); speakReply(reply) }
+                }
+            }
+            choices.addView(button, GridLayout.LayoutParams(GridLayout.spec(index / 3, 1f), GridLayout.spec(index % 3, 1f)).apply {
+                width = 0
+                height = if (visible.size > 3) dp(52) else dp(68)
+                setMargins(dp(3), dp(3), dp(3), dp(3))
+            })
+        }
+    }
+
+    private fun handleSpoken(text: String) {
+        touchInteraction()
+        tracker.recordSpeech(text)
+        events.record("speech", text)
+        engine.reply(text).also { renderReply(it); speakReply(it) }
+    }
+
+    private fun touchInteraction() { lastInteractionAt = System.currentTimeMillis() }
+
+    private fun startListening() {
+        if (waitingForMovement) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 10)
+            return
+        }
+        voice.stop()
+        if (!speech.startListening()) status.text = "Só um instantinho..."
+    }
+
+    private fun renderInteractionState(state: InteractionState) {
+        status.text = when (state) {
+            InteractionState.IDLE -> "Sua vez"
+            InteractionState.SPEAKING -> "A fadinha está falando"
+            InteractionState.WAITING -> "Já vou te ouvir"
+            InteractionState.LISTENING -> "A fadinha está ouvindo você"
+            InteractionState.PROCESSING -> "Pensando no que você falou"
+        }
+        when (state) {
+            InteractionState.LISTENING -> fairy.setMood(RobotMood.LISTENING)
+            InteractionState.PROCESSING -> fairy.setMood(RobotMood.THINKING)
+            InteractionState.SPEAKING -> fairy.setMood(RobotMood.SPEAKING)
+            else -> Unit
+        }
+    }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (!waitingForMovement || event?.sensor?.type != Sensor.TYPE_ACCELEROMETER) return
+        val total = abs(event.values[0]) + abs(event.values[1]) + abs(event.values[2])
+        if (baselineAcceleration == 0f) baselineAcceleration = total
+        val now = System.currentTimeMillis()
+        if (abs(total - baselineAcceleration) > 5.5f && now - lastMovementAt > 2500) {
+            lastMovementAt = now
+            waitingForMovement = false
+            touchInteraction()
+            events.record("routine", "returned_from_bathroom")
+            engine.onMovementDetected().also { renderReply(it); speakReply(it) }
+        }
+        baselineAcceleration = total
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+    override fun onResume() { super.onResume(); if (::updater.isInitialized) updater.onResume() }
+
+    private fun choiceColor(label: String) = when (label) {
+        "A", "FELIZ", "ANIMADA", "HISTÓRIA" -> Color.rgb(244, 170, 73)
+        "C", "SIM", "ANIMAIS", "CAVALO" -> Color.rgb(72, 185, 133)
+        "P", "NÃO", "TRISTE", "ABC" -> Color.rgb(78, 150, 226)
+        "BRAVA" -> Color.rgb(232, 105, 105)
+        "MEDO", "CARINHAS" -> Color.rgb(151, 104, 211)
+        else -> Color.rgb(142, 91, 190)
+    }
+
+    private fun roundedBackground(color: Int, radius: Float) = GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = dp(radius.toInt()).toFloat()
+    }
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    override fun onDestroy() {
+        handler.removeCallbacks(proactivePrompt)
+        sensorManager?.unregisterListener(this)
+        if (::speech.isInitialized) speech.destroy()
+        if (::voice.isInitialized) voice.shutdown()
+        super.onDestroy()
+    }
 }
