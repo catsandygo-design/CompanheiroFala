@@ -21,16 +21,8 @@ android {
         applicationId = "br.com.companheirofala"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "0.18.0"
-
-        val backendUrl = providers.gradleProperty("backendUrl")
-            .orElse("https://companheiro-fala-api-siocred1.vercel.app")
-            .get()
-            .trimEnd('/')
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-        buildConfigField("String", "AI_BACKEND_URL", "\"$backendUrl\"")
+        versionCode = 19
+        versionName = "0.19.0"
     }
 
     buildTypes {
@@ -45,5 +37,4 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { buildConfig = true }
 }
