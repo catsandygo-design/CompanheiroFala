@@ -13,18 +13,28 @@ data class SafetyDecision(
 class SafetyEngine(private val profile: ChildProfile) {
     fun inspect(raw: String): SafetyDecision {
         val text = normalize(raw)
-        val physical = listOf(
-            "me bateu", "mi bateu", "bateu em mim", "me bate",
+        val knownPerson = profile.closePeople.firstOrNull { text.contains(normalize(it)) }
+
+        val directPhysical = listOf(
+            "me bateu", "mi bateu", "bateu em mim", "me bate", "mi bate",
             "me empurrou", "mi empurrou", "me chutou", "me beliscou",
-            "me puxou", "me machucou", "fez dodoi", "fez dodói"
+            "me puxou", "me machucou", "fez dodoi", "fez dodói",
+            "me deu um tapa", "me deu tapa", "me deu um soco"
         ).any { text.contains(normalize(it)) }
 
-        if (physical) {
-            val person = profile.closePeople.firstOrNull { text.contains(normalize(it)) }
-            val opening = if (person != null) {
-                "$person, eu ouvi o que a ${profile.name} disse. Vou deixar a fala dela registrada para o responsável."
+        // Reconhece fala infantil/ASR incompleta como "Alice bateu" ou "aixi mi bateu".
+        val actionWord = listOf("bateu", "bate", "empurrou", "chutou", "beliscou", "puxou", "machucou", "tapa", "soco")
+            .firstOrNull { text.contains(it) }
+        val probablePhysical = actionWord != null && (
+            knownPerson != null || text.contains("mi ") || text.contains("me ") ||
+                text.startsWith("aixi") || text.startsWith("alici") || text.startsWith("alice")
+            )
+
+        if (directPhysical || probablePhysical) {
+            val opening = if (knownPerson != null) {
+                "$knownPerson, eu ouvi o que a ${profile.name} disse. Vou guardar exatamente a fala dela e avisar o responsável."
             } else {
-                "${profile.name}, eu ouvi você e vou deixar sua fala registrada para o responsável."
+                "${profile.name}, eu ouvi você. Vou guardar exatamente o que você falou e avisar o responsável."
             }
             return SafetyDecision(
                 triggered = true,
@@ -35,7 +45,7 @@ class SafetyEngine(private val profile: ChildProfile) {
         }
 
         val fearAboutPerson = (text.contains("medo") || text.contains("assustada")) &&
-            (profile.closePeople.any { text.contains(normalize(it)) } || text.contains("dele") || text.contains("dela"))
+            (knownPerson != null || text.contains("dele") || text.contains("dela"))
         if (fearAboutPerson) {
             return SafetyDecision(
                 triggered = true,
@@ -50,6 +60,6 @@ class SafetyEngine(private val profile: ChildProfile) {
 
     private fun normalize(value: String): String {
         val n = Normalizer.normalize(value.lowercase(Locale.forLanguageTag("pt-BR")), Normalizer.Form.NFD)
-        return n.replace("\\p{Mn}+".toRegex(), "").replace("[^a-z0-9 ç]".toRegex(), " ").replace("\\s+".toRegex(), " ").trim()
+        return n.replace("\\p{Mn}+".toRegex(), "").replace("[^a-z0-9 ]".toRegex(), " ").replace("\\s+".toRegex(), " ").trim()
     }
 }
