@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
 
@@ -20,7 +21,7 @@ class FairyPortraitView(context: Context) : FrameLayout(context) {
             cornerRadius = dp(30).toFloat()
             setColor(Color.TRANSPARENT)
         }
-        outlineProvider = background.outlineProvider
+        outlineProvider = ViewOutlineProvider.BACKGROUND
         addView(image, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
     }
 
