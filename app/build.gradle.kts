@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -9,10 +11,8 @@ val restoreFairyImage = tasks.register("restoreFairyImage") {
         val payload = File(drawableDir, "fairy_companion_base64.txt")
         val output = File(drawableDir, "fairy_companion.jpg")
         if (payload.exists()) {
-            output.writeBytes(java.util.Base64.getMimeDecoder().decode(payload.readText().trim()))
-            payload.delete()
+            output.writeBytes(Base64.getMimeDecoder().decode(payload.readText().trim()))
         }
-        File(drawableDir, "README_FAIRY.txt").delete()
     }
 }
 
