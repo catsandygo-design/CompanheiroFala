@@ -12,7 +12,8 @@ data class ConversationReply(
     val scene: VisualScene = VisualScene.NONE,
     val choices: List<String> = emptyList(),
     val waitForMovement: Boolean = false,
-    val parentAlert: String? = null
+    val parentAlert: String? = null,
+    val playTune: Boolean = false
 )
 
 private enum class PendingTurn { NONE, FEELING_REASON, FALL_HURT, HURT_WHERE, SAFETY_HURT, SAFETY_WHERE, SCHOOL_HAPPENED, SCHOOL_KIND, SCHOOL_SAFETY, STORY_CHOICE }
@@ -96,6 +97,8 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
             c == "HISTÓRIA" || c == "HISTORIA" -> start(PlayMode.STORY)
             c == "ROTINA" -> start(PlayMode.ROUTINE)
             c == "CARINHAS" -> start(PlayMode.FEELINGS)
+            c == "IMAGENS" || c == "PALAVRAS" -> vocabularyBoard()
+            c == "MÚSICA" || c == "MUSICA" -> localSong()
             c == "CONVERSAR" -> ConversationReply("Pode falar comigo. Eu estou te ouvindo.", RobotMood.CURIOUS, keepListening = true, choices = listOf("BRINCAR", "CARINHAS"))
             c == "INÍCIO" || c == "INICIO" -> start(PlayMode.HOME)
             c == "CHAMAR ADULTO" -> ConversationReply("Chama um adulto em quem você confia e fica pertinho dele, tá?", RobotMood.SAD, parentAlert = "A criança tocou em CHAMAR ADULTO após uma interação de proteção.")
@@ -118,6 +121,9 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
 
     private fun detectCommand(text: String): ConversationReply? = when {
         containsAny(text, "oi", "ola", "bom dia", "boa tarde", "boa noite") -> home()
+        containsAny(text, "papai chegou", "pai chegou", "papai chego", "pai chego") -> ConversationReply("O papai chegou! Vai lá dar um abraço nele. Depois você pode voltar para me contar.", RobotMood.HAPPY, choices = listOf("INÍCIO", "BRINCAR"))
+        containsAny(text, "onde voce", "cade voce", "cadê voce", "onde esta a fada") -> ConversationReply("Eu estou aqui na tela, pertinho de você. Toca em mim quando quiser conversar.", RobotMood.HAPPY, choices = listOf("BRINCAR", "MÚSICA", "IMAGENS"))
+        containsAny(text, "dar mel", "mel pra fada", "mel para fada", "toma mel") -> ConversationReply("Que carinho! Obrigada pelo mel. Minha luz ficou ainda mais brilhante!", RobotMood.PROUD, scene = VisualScene.HAPPY_FACE, choices = listOf("BRINCAR", "MÚSICA", "IMAGENS"))
         containsAny(text, "quero brincar", "vamos brincar", "brincar", "brinca", "jogar", "jogo") -> start(PlayMode.PLAY)
         containsAny(text, "conta uma historia", "quero historia", "historia", "historinha") -> start(PlayMode.STORY)
         containsAny(text, "quero ver animal", "animal", "animais", "cavalo", "gato", "cachorro") -> start(PlayMode.ANIMALS)
@@ -139,9 +145,22 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     }
 
     private fun home() = ConversationReply(
-        "Oi, ${profile.name}! Eu sou sua fadinha. Quer brincar, aprender, ouvir uma história ou me contar como você está?",
+        "Oi, ${profile.name}! Quer brincar, ver figuras, ouvir uma musiquinha ou me contar uma coisa?",
         RobotMood.HAPPY,
-        choices = listOf("BRINCAR", "ANIMAIS", "ABC", "HISTÓRIA", "CARINHAS", "ROTINA")
+        choices = listOf("BRINCAR", "IMAGENS", "MÚSICA", "ANIMAIS", "ABC", "HISTÓRIA")
+    )
+
+    private fun vocabularyBoard() = ConversationReply(
+        "Olha as figuras! Tem cavalo, gato, cachorro, sapo, galinha, urso, macaco, peixe, morango, laranja, escova, carro, bicicleta, coleguinha, copo e colher. Qual você quer falar?",
+        RobotMood.SURPRISED,
+        choices = listOf("ANIMAIS", "ABC", "BRINCAR", "MÚSICA", "CARINHAS", "INÍCIO")
+    )
+
+    private fun localSong() = ConversationReply(
+        "Vou tocar a musiquinha da Lumi! Você pode bater palminhas bem devagar: um, dois, três.",
+        RobotMood.HAPPY,
+        choices = listOf("DE NOVO", "BRINCAR", "IMAGENS", "INÍCIO"),
+        playTune = true
     )
 
     private fun playMenu() = ConversationReply(

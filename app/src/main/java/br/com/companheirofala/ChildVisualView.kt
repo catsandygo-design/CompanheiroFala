@@ -12,7 +12,8 @@ import kotlin.math.sin
 
 enum class VisualScene {
     NONE, HORSE, FOOD, TOOTHBRUSH, WATER, TOILET, HANDS, BACTERIA,
-    FEELINGS, HAPPY_FACE, SAD_FACE, ANGRY_FACE, SCARED_FACE, TIRED_FACE, EXCITED_FACE
+    FEELINGS, HAPPY_FACE, SAD_FACE, ANGRY_FACE, SCARED_FACE, TIRED_FACE, EXCITED_FACE,
+    HONEY, HUG
 }
 
 class ChildVisualView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
@@ -45,7 +46,7 @@ class ChildVisualView @JvmOverloads constructor(context: Context, attrs: Attribu
             VisualScene.EXCITED_FACE -> face(c, w/2, h/2, h*.27f, 5)
             else -> Unit
         }
-        if (scene == VisualScene.BACTERIA) postInvalidateDelayed(60)
+        if (scene in setOf(VisualScene.BACTERIA, VisualScene.TOOTHBRUSH, VisualScene.WATER)) postInvalidateDelayed(60)
     }
 
     private fun horse(c: Canvas, w: Float, h: Float) {
@@ -130,16 +131,25 @@ class ChildVisualView @JvmOverloads constructor(context: Context, attrs: Attribu
     }
 
     private fun brush(c: Canvas,w:Float,h:Float){
-        c.save();c.rotate(-14f,w/2,h/2)
+        val swing = sin(phase * 3).toFloat() * w * .09f
+        p.color=Color.rgb(255,224,203); c.drawRoundRect(RectF(w*.26f,h*.17f,w*.74f,h*.69f),h*.22f,h*.22f,p)
+        p.color=Color.WHITE; c.drawRoundRect(RectF(w*.33f,h*.36f,w*.67f,h*.58f),18f,18f,p)
+        p.color=Color.rgb(53,64,88); c.drawRoundRect(RectF(w*.38f,h*.45f,w*.62f,h*.53f),8f,8f,p)
+        c.save();c.translate(swing, 0f);c.rotate(-14f,w/2,h/2)
         p.color=Color.rgb(87,165,245);c.drawRoundRect(RectF(w*.18f,h*.48f,w*.82f,h*.61f),25f,25f,p)
         p.color=Color.WHITE;(0..5).forEach{i->c.drawRoundRect(RectF(w*(.66f+i*.025f),h*.35f,w*(.68f+i*.025f),h*.50f),5f,5f,p)}
         c.restore()
     }
 
     private fun water(c: Canvas,w:Float,h:Float){
+        val lift = sin(phase * 2.5).toFloat() * h * .07f
+        p.color=Color.rgb(255,224,203);c.drawCircle(w*.68f,h*.42f,lift.coerceAtLeast(0f)+h*.12f,p)
+        c.save(); c.translate(0f, lift)
         p.color=Color.rgb(214,241,255);c.drawRoundRect(RectF(w*.32f,h*.15f,w*.68f,h*.86f),26f,26f,p)
         p.color=Color.rgb(79,181,239);c.drawRoundRect(RectF(w*.35f,h*.38f,w*.65f,h*.81f),20f,20f,p)
         p.color=Color.argb(130,255,255,255);c.drawRoundRect(RectF(w*.39f,h*.22f,w*.43f,h*.72f),12f,12f,p)
+        c.restore()
+        p.color=Color.rgb(79,181,239);(0..2).forEach { i -> c.drawCircle(w*(.42f+i*.08f), h*.16f + ((phase*11+i*23)%30), 5f, p) }
     }
 
     private fun toilet(c: Canvas,w:Float,h:Float){

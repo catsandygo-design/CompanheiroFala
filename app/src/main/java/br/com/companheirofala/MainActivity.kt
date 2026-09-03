@@ -39,6 +39,8 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var speech: SpeechEngine
     private lateinit var events: ParentEventRepository
     private lateinit var tracker: DevelopmentTracker
+    private lateinit var music: LocalMusicEngine
+    private lateinit var vocabularyBoard: ImageView
 
     private val profile = ChildProfile.gabi()
     private val engine = ConversationEngine(profile)
@@ -76,6 +78,7 @@ class MainActivity : Activity(), SensorEventListener {
         updater = AppUpdater(this)
         events = ParentEventRepository(this)
         tracker = DevelopmentTracker(this)
+        music = LocalMusicEngine()
 
         speech = SpeechEngine(
             context = this,
@@ -154,6 +157,14 @@ class MainActivity : Activity(), SensorEventListener {
             setOnClickListener { touchInteraction(); startListening() }
         }
         fairyStage.addView(fairy, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+        vocabularyBoard = ImageView(this).apply {
+            setImageResource(R.drawable.vocabulary_board)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "Figuras de palavras infantis"
+            visibility = View.GONE
+            setOnClickListener { touchInteraction(); startListening() }
+        }
+        fairyStage.addView(vocabularyBoard, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
         root.addView(fairyStage, LinearLayout.LayoutParams(-1, dp(292)).apply { bottomMargin = dp(8) })
 
         visual = ChildVisualView(this).apply { visibility = View.GONE }
@@ -204,10 +215,14 @@ class MainActivity : Activity(), SensorEventListener {
         speechBubble.text = reply.text
         setFairyMood(reply.mood)
         visual.showScene(reply.scene)
-        visual.visibility = if (reply.scene == VisualScene.NONE) View.GONE else View.VISIBLE
+        val showVocabulary = reply.text.startsWith("Olha as figuras")
+        vocabularyBoard.visibility = if (showVocabulary) View.VISIBLE else View.GONE
+        fairy.visibility = if (showVocabulary) View.GONE else View.VISIBLE
+        visual.visibility = if (reply.scene == VisualScene.NONE || showVocabulary) View.GONE else View.VISIBLE
         waitingForMovement = reply.waitForMovement
         renderChoices(reply.choices)
         reply.parentAlert?.let { events.record("parent_alert", it, "child=${profile.name}") }
+        if (reply.playTune && ::music.isInitialized) music.play()
         status.text = if (reply.waitForMovement) "A fadinha espera você voltar" else "Sua vez"
     }
 
@@ -322,6 +337,7 @@ class MainActivity : Activity(), SensorEventListener {
         "A", "FELIZ", "ANIMADA", "HISTÓRIA" -> Color.rgb(244, 170, 73)
         "C", "SIM", "ANIMAIS", "CAVALO" -> Color.rgb(72, 185, 133)
         "P", "NÃO", "TRISTE", "ABC" -> Color.rgb(78, 150, 226)
+        "IMAGENS" -> Color.rgb(238, 121, 171)
         "BRAVA" -> Color.rgb(232, 105, 105)
         "MEDO", "CARINHAS" -> Color.rgb(151, 104, 211)
         else -> Color.rgb(142, 91, 190)
@@ -351,6 +367,8 @@ class MainActivity : Activity(), SensorEventListener {
         "HISTÓRIA", "HISTORIA" -> "📖"
         "CARINHAS" -> "😀"
         "ROTINA" -> "🌈"
+        "IMAGENS", "PALAVRAS" -> "🖼️"
+        "MÚSICA", "MUSICA" -> "🎵"
         "INÍCIO", "INICIO" -> "🏠"
         "FELIZ" -> "😀"
         "TRISTE" -> "😢"
@@ -400,6 +418,7 @@ class MainActivity : Activity(), SensorEventListener {
         sensorManager?.unregisterListener(this)
         if (::speech.isInitialized) speech.destroy()
         if (::voice.isInitialized) voice.shutdown()
+        if (::music.isInitialized) music.release()
         super.onDestroy()
     }
 }

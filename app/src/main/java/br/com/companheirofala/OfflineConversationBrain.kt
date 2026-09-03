@@ -49,11 +49,11 @@ class OfflineConversationBrain(private val profile: ChildProfile) {
                 RobotMood.SURPRISED,
                 listOf("FADA", "CAVALO", "CASA")
             )
-            matches(text, "musica", "musiquinha", "cantar", "canta") -> answer(
-                Topic.PLAY,
-                "Eu não canto músicas conhecidas, mas podemos inventar uma: bate palminha duas vezes e escolha um animal para nossa música.",
+            matches(text, "musica", "musiquinha", "cantar", "canta") -> ConversationReply(
+                "Vou tocar a musiquinha da Lumi! Pode bater palminhas: um, dois, três.",
                 RobotMood.HAPPY,
-                listOf("CAVALO", "GATO", "CACHORRO")
+                choices = listOf("BRINCAR", "IMAGENS", "INÍCIO"),
+                playTune = true
             )
             matches(text, "sim", "aham", "uhum", "ta bom", "legal") -> continueLastTopic()
             matches(text, "nao", "nao sei", "nao quero falar") -> answer(
