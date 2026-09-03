@@ -45,7 +45,7 @@ jobs:
       - name: Surface test failure
         if: failure()
         run: |
-          FAILURE=$(grep -R -m1 "<failure" app/build/test-results/testDebugUnitTest | sed 's/<[^>]*>//g' | tr '\n' ' ' | cut -c1-500)
+          FAILURE=$(grep -R -B1 -m1 "<failure" app/build/test-results/testDebugUnitTest | sed 's/<[^>]*>//g' | tr '\n' ' ' | cut -c1-500)
           echo "::error title=Offline conversation test::$FAILURE"
 
       - name: Upload test report
