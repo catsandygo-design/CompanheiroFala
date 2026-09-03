@@ -47,6 +47,15 @@ export default async function handler(req, res) {
     const data = await upstream.json()
     if (!upstream.ok) {
       console.error("OpenAI request failed", upstream.status, data?.error?.type)
+      if (upstream.status === 401) {
+        return reply(res, 502, { error: "A chave da OpenAI foi recusada. Confira a variável OPENAI_API_KEY na Vercel." })
+      }
+      if (upstream.status === 429) {
+        return reply(res, 502, { error: "A conta da API atingiu o limite ou está sem créditos." })
+      }
+      if (upstream.status === 403 || upstream.status === 404) {
+        return reply(res, 502, { error: "Este projeto não tem acesso ao modelo configurado." })
+      }
       return reply(res, 502, { error: "Não consegui conversar agora. Vamos tentar de novo?" })
     }
 

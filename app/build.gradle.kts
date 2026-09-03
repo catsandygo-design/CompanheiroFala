@@ -21,8 +21,8 @@ android {
         applicationId = "br.com.companheirofala"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "0.17.0"
+        versionCode = 18
+        versionName = "0.18.0"
 
         val backendUrl = providers.gradleProperty("backendUrl")
             .orElse("https://companheiro-fala-api-siocred1.vercel.app")
