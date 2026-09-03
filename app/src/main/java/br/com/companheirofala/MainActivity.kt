@@ -35,6 +35,7 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var speech: SpeechEngine
     private lateinit var events: ParentEventRepository
     private lateinit var tracker: DevelopmentTracker
+    private lateinit var aiConversation: OpenAiConversationService
 
     private val profile = ChildProfile.gabi()
     private val engine = ConversationEngine(profile)
@@ -70,6 +71,7 @@ class MainActivity : Activity(), SensorEventListener {
         updater = AppUpdater(this)
         events = ParentEventRepository(this)
         tracker = DevelopmentTracker(this)
+        aiConversation = OpenAiConversationService()
 
         speech = SpeechEngine(
             context = this,
@@ -234,7 +236,26 @@ class MainActivity : Activity(), SensorEventListener {
         touchInteraction()
         tracker.recordSpeech(text)
         events.record("speech", text)
-        engine.reply(text).also { renderReply(it); speakReply(it) }
+        val localReply = engine.reply(text)
+        if (!aiConversation.isConfigured || localReply.parentAlert != null) {
+            renderReply(localReply)
+            speakReply(localReply)
+            return
+        }
+        status.text = "A fadinha está pensando"
+        aiConversation.reply(
+            message = text,
+            onSuccess = { answer ->
+                ConversationReply(answer, RobotMood.HAPPY, keepListening = true).also {
+                    renderReply(it)
+                    speakReply(it)
+                }
+            },
+            onFailure = {
+                renderReply(localReply)
+                speakReply(localReply)
+            }
+        )
     }
 
     private fun touchInteraction() { lastInteractionAt = System.currentTimeMillis() }

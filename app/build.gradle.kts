@@ -21,8 +21,14 @@ android {
         applicationId = "br.com.companheirofala"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.14.0"
+        versionCode = 15
+        versionName = "0.15.0"
+
+        val backendUrl = providers.gradleProperty("backendUrl").orElse("").get()
+            .trimEnd('/')
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        buildConfigField("String", "AI_BACKEND_URL", "\"$backendUrl\"")
     }
 
     buildTypes {
@@ -37,4 +43,5 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    buildFeatures { buildConfig = true }
 }
