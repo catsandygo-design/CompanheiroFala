@@ -19,6 +19,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.widget.Button
 import android.widget.GridLayout
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -116,7 +117,7 @@ class MainActivity : Activity(), SensorEventListener {
             setPadding(dp(10), dp(8), dp(10), dp(12))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.rgb(48, 88, 79), Color.rgb(111, 168, 135), Color.rgb(244, 206, 224))
+                intArrayOf(Color.rgb(47, 33, 83), Color.rgb(116, 73, 159), Color.rgb(250, 186, 202))
             )
             setOnApplyWindowInsetsListener { v, insets ->
                 val bottom = insets.getInsets(WindowInsets.Type.navigationBars()).bottom
@@ -126,35 +127,40 @@ class MainActivity : Activity(), SensorEventListener {
         }
 
         root.addView(TextView(this).apply {
-            text = "MEU CORAÇÃO • v0.14"
-            textSize = 13f
+            text = "LUMI, SUA FADINHA ✨"
+            textSize = 15f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setTypeface(typeface, Typeface.BOLD)
-        }, LinearLayout.LayoutParams(-1, dp(26)))
+        }, LinearLayout.LayoutParams(-1, dp(30)))
 
+        val fairyStage = FrameLayout(this).apply {
+            background = roundedBackground(Color.argb(72, 255, 255, 255), 36f)
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+        }
         fairy = ImageView(this).apply {
-            setImageResource(R.drawable.fairy_companion)
+            setImageResource(R.drawable.fairy_pet)
             scaleType = ImageView.ScaleType.CENTER_CROP
             adjustViewBounds = false
-            contentDescription = "Fada companheira"
-            background = roundedBackground(Color.rgb(240, 220, 236), 28f)
+            contentDescription = "Lumi, a fadinha companheira"
             clipToOutline = false
+            setOnClickListener { touchInteraction(); startListening() }
         }
-        root.addView(fairy, LinearLayout.LayoutParams(-1, dp(270)).apply { bottomMargin = dp(8) })
+        fairyStage.addView(fairy, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+        root.addView(fairyStage, LinearLayout.LayoutParams(-1, dp(292)).apply { bottomMargin = dp(8) })
 
         visual = ChildVisualView(this).apply { visibility = View.GONE }
         root.addView(visual, LinearLayout.LayoutParams(-1, dp(156)).apply { bottomMargin = dp(7) })
 
         speechBubble = TextView(this).apply {
-            textSize = 17f
+            textSize = 18f
             setTextColor(Color.rgb(57, 41, 67))
             gravity = Gravity.CENTER
             minHeight = dp(80)
-            maxLines = 4
+            maxLines = 3
             setTypeface(typeface, Typeface.BOLD)
             setPadding(dp(14), dp(10), dp(14), dp(10))
-            background = roundedBackground(Color.rgb(255, 250, 253), 24f)
+            background = roundedBackground(Color.rgb(255, 251, 255), 28f)
         }
         root.addView(speechBubble, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
 
@@ -164,23 +170,23 @@ class MainActivity : Activity(), SensorEventListener {
             alignmentMode = GridLayout.ALIGN_BOUNDS
             setPadding(0, dp(3), 0, dp(3))
         }
-        root.addView(choices, LinearLayout.LayoutParams(-1, dp(116)))
+        root.addView(choices, LinearLayout.LayoutParams(-1, dp(124)))
 
         status = TextView(this).apply {
-            text = "Sua vez"
-            textSize = 12f
+            text = "Toque na Lumi ou no microfone e fale"
+            textSize = 13f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
         }
         root.addView(status, LinearLayout.LayoutParams(-1, dp(22)))
 
         root.addView(Button(this).apply {
-            text = "★  FALAR COM A FADA  ★"
-            textSize = 17f
+            text = "🎙  FALAR COM A LUMI  🎙"
+            textSize = 18f
             isAllCaps = false
             setTextColor(Color.WHITE)
             setTypeface(typeface, Typeface.BOLD)
-            background = roundedBackground(Color.rgb(118, 75, 164), 30f)
+            background = roundedBackground(Color.rgb(246, 113, 160), 30f)
             setOnClickListener { touchInteraction(); startListening() }
         }, LinearLayout.LayoutParams(-1, dp(58)))
 
@@ -209,11 +215,12 @@ class MainActivity : Activity(), SensorEventListener {
         val visible = items.take(6)
         visible.forEachIndexed { index, label ->
             val button = Button(this).apply {
-                text = label
-                textSize = if (label.length <= 2) 28f else 13f
+                text = choiceSymbol(label)
+                textSize = 32f
                 isAllCaps = false
                 setTextColor(Color.WHITE)
                 setTypeface(typeface, Typeface.BOLD)
+                contentDescription = label
                 background = roundedBackground(choiceColor(label), 22f)
                 setOnClickListener {
                     touchInteraction()
@@ -224,7 +231,7 @@ class MainActivity : Activity(), SensorEventListener {
             }
             choices.addView(button, GridLayout.LayoutParams(GridLayout.spec(index / 3, 1f), GridLayout.spec(index % 3, 1f)).apply {
                 width = 0
-                height = if (visible.size > 3) dp(52) else dp(68)
+                height = if (visible.size > 3) dp(56) else dp(72)
                 setMargins(dp(3), dp(3), dp(3), dp(3))
             })
         }
@@ -311,6 +318,49 @@ class MainActivity : Activity(), SensorEventListener {
         "BRAVA" -> Color.rgb(232, 105, 105)
         "MEDO", "CARINHAS" -> Color.rgb(151, 104, 211)
         else -> Color.rgb(142, 91, 190)
+    }
+
+    private fun choiceSymbol(label: String) = when (label) {
+        "BRINCAR" -> "🎲"
+        "ANIMAIS" -> "🐴"
+        "ABC", "LETRAS" -> "🔤"
+        "HISTÓRIA", "HISTORIA" -> "📖"
+        "CARINHAS" -> "😀"
+        "ROTINA" -> "🌈"
+        "INÍCIO", "INICIO" -> "🏠"
+        "FELIZ" -> "😀"
+        "TRISTE" -> "😢"
+        "BRAVA" -> "😠"
+        "MEDO" -> "😨"
+        "CANSADA" -> "😴"
+        "ANIMADA" -> "🤩"
+        "SIM", "CONSEGUI" -> "✅"
+        "NÃO", "NAO" -> "❌"
+        "CAVALO" -> "🐴"
+        "GATO" -> "🐱"
+        "CACHORRO" -> "🐶"
+        "A" -> "🍎"
+        "C" -> "🐴"
+        "P" -> "🍞"
+        "ÁGUA", "AGUA" -> "💧"
+        "BANHEIRO" -> "🚽"
+        "CONTAR", "CONTAR MAIS", "QUERO CONTAR" -> "💬"
+        "DE NOVO" -> "🔁"
+        "COISA BOA" -> "🌟"
+        "COISA DIFÍCIL" -> "🧩"
+        "BRINCADEIRA" -> "🛝"
+        "AZUL" -> "🔵"
+        "VERMELHO" -> "🔴"
+        "AMARELO" -> "🟡"
+        "FADA" -> "🧚"
+        "CASA" -> "🏠"
+        "PENSAR JUNTAS" -> "💡"
+        "CONVERSAR" -> "💬"
+        "IR ATÉ A LUZ" -> "🔦"
+        "CHAMAR A FADA" -> "🧚"
+        "FAMILIA" -> "👨‍👩‍👧"
+        "CHAMAR ADULTO" -> "🧑"
+        else -> "✨"
     }
 
     private fun roundedBackground(color: Int, radius: Float) = GradientDrawable().apply {
