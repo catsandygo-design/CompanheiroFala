@@ -19,12 +19,13 @@ import android.view.View
 import android.view.WindowInsets
 import android.widget.Button
 import android.widget.GridLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import kotlin.math.abs
 
 class MainActivity : Activity(), SensorEventListener {
-    private lateinit var fairy: FairyPortraitView
+    private lateinit var fairy: ImageView
     private lateinit var visual: ChildVisualView
     private lateinit var speechBubble: TextView
     private lateinit var choices: GridLayout
@@ -73,20 +74,20 @@ class MainActivity : Activity(), SensorEventListener {
         speech = SpeechEngine(
             context = this,
             onState = { state -> runOnUiThread { renderInteractionState(state) } },
-            onLevel = { level -> runOnUiThread { fairy.setVoiceLevel(level) } },
+            onLevel = { level -> runOnUiThread { setFairyVoiceLevel(level) } },
             onResult = { text -> runOnUiThread { handleSpoken(text) } },
             onFailure = { runOnUiThread { status.text = "Não ouvi direitinho. Toca na estrela e fala de novo." } }
         )
         voice = VoiceEngine(
             context = this,
-            onStart = { runOnUiThread { speech.markSpeaking(); fairy.setMood(RobotMood.SPEAKING) } },
+            onStart = { runOnUiThread { speech.markSpeaking(); setFairyMood(RobotMood.SPEAKING) } },
             onDone = {
                 runOnUiThread {
                     speech.markIdle()
-                    fairy.setMood(RobotMood.HAPPY)
+                    setFairyMood(RobotMood.HAPPY)
                     if (autoListenAfterSpeech && !waitingForMovement) {
                         autoListenAfterSpeech = false
-                        status.postDelayed({ startListening() }, 450)
+                        status.postDelayed({ startListening() }, 400)
                     }
                 }
             },
@@ -115,7 +116,7 @@ class MainActivity : Activity(), SensorEventListener {
             setPadding(dp(10), dp(8), dp(10), dp(12))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.rgb(45, 84, 75), Color.rgb(102, 158, 126), Color.rgb(238, 187, 214))
+                intArrayOf(Color.rgb(48, 88, 79), Color.rgb(111, 168, 135), Color.rgb(244, 206, 224))
             )
             setOnApplyWindowInsetsListener { v, insets ->
                 val bottom = insets.getInsets(WindowInsets.Type.navigationBars()).bottom
@@ -125,27 +126,35 @@ class MainActivity : Activity(), SensorEventListener {
         }
 
         root.addView(TextView(this).apply {
-            text = "MEU CORAÇÃO • v0.13"
+            text = "MEU CORAÇÃO • v0.14"
             textSize = 13f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setTypeface(typeface, Typeface.BOLD)
         }, LinearLayout.LayoutParams(-1, dp(26)))
 
-        fairy = FairyPortraitView(this)
-        root.addView(fairy, LinearLayout.LayoutParams(-1, dp(245)).apply { bottomMargin = dp(7) })
+        fairy = ImageView(this).apply {
+            setImageResource(R.drawable.fairy_companion)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            adjustViewBounds = false
+            contentDescription = "Fada companheira"
+            background = roundedBackground(Color.rgb(240, 220, 236), 28f)
+            clipToOutline = false
+        }
+        root.addView(fairy, LinearLayout.LayoutParams(-1, dp(270)).apply { bottomMargin = dp(8) })
 
         visual = ChildVisualView(this).apply { visibility = View.GONE }
-        root.addView(visual, LinearLayout.LayoutParams(-1, dp(132)).apply { bottomMargin = dp(7) })
+        root.addView(visual, LinearLayout.LayoutParams(-1, dp(156)).apply { bottomMargin = dp(7) })
 
         speechBubble = TextView(this).apply {
             textSize = 17f
             setTextColor(Color.rgb(57, 41, 67))
             gravity = Gravity.CENTER
-            minHeight = dp(82)
+            minHeight = dp(80)
+            maxLines = 4
             setTypeface(typeface, Typeface.BOLD)
             setPadding(dp(14), dp(10), dp(14), dp(10))
-            background = roundedBackground(Color.rgb(255, 248, 252), 24f)
+            background = roundedBackground(Color.rgb(255, 250, 253), 24f)
         }
         root.addView(speechBubble, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
 
@@ -180,7 +189,7 @@ class MainActivity : Activity(), SensorEventListener {
 
     private fun renderReply(reply: ConversationReply) {
         speechBubble.text = reply.text
-        fairy.setMood(reply.mood)
+        setFairyMood(reply.mood)
         visual.showScene(reply.scene)
         visual.visibility = if (reply.scene == VisualScene.NONE) View.GONE else View.VISIBLE
         waitingForMovement = reply.waitForMovement
@@ -236,22 +245,43 @@ class MainActivity : Activity(), SensorEventListener {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 10)
             return
         }
+        autoListenAfterSpeech = false
         voice.stop()
-        if (!speech.startListening()) status.text = "Só um instantinho..."
+        speech.markIdle()
+        status.postDelayed({
+            if (!speech.startListening()) {
+                speech.markIdle()
+                status.text = "Toca de novo e pode falar."
+            }
+        }, 180)
+    }
+
+    private fun setFairyMood(mood: RobotMood) {
+        when (mood) {
+            RobotMood.LISTENING -> fairy.animate().alpha(1f).scaleX(1.025f).scaleY(1.025f).setDuration(160).start()
+            RobotMood.SPEAKING -> fairy.animate().alpha(1f).scaleX(1.012f).scaleY(1.012f).setDuration(160).start()
+            RobotMood.SAD -> fairy.animate().alpha(.93f).scaleX(1f).scaleY(1f).setDuration(180).start()
+            else -> fairy.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(180).start()
+        }
+    }
+
+    private fun setFairyVoiceLevel(level: Float) {
+        val scale = if (level > 7f) 1.018f else 1f
+        fairy.animate().scaleX(scale).scaleY(scale).setDuration(80).start()
     }
 
     private fun renderInteractionState(state: InteractionState) {
         status.text = when (state) {
             InteractionState.IDLE -> "Sua vez"
             InteractionState.SPEAKING -> "A fadinha está falando"
-            InteractionState.WAITING -> "Já vou te ouvir"
-            InteractionState.LISTENING -> "A fadinha está ouvindo você"
-            InteractionState.PROCESSING -> "Pensando no que você falou"
+            InteractionState.WAITING -> "Pode falar"
+            InteractionState.LISTENING -> "Estou te ouvindo"
+            InteractionState.PROCESSING -> "Entendendo o que você falou"
         }
         when (state) {
-            InteractionState.LISTENING -> fairy.setMood(RobotMood.LISTENING)
-            InteractionState.PROCESSING -> fairy.setMood(RobotMood.THINKING)
-            InteractionState.SPEAKING -> fairy.setMood(RobotMood.SPEAKING)
+            InteractionState.LISTENING -> setFairyMood(RobotMood.LISTENING)
+            InteractionState.PROCESSING -> setFairyMood(RobotMood.THINKING)
+            InteractionState.SPEAKING -> setFairyMood(RobotMood.SPEAKING)
             else -> Unit
         }
     }
