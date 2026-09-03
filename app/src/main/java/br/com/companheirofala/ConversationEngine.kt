@@ -3,7 +3,7 @@ package br.com.companheirofala
 import java.text.Normalizer
 import java.util.Locale
 
-enum class PlayMode { HOME, FEELINGS, LETTERS, ROUTINE, ANIMALS, STORY, PLAY }
+enum class PlayMode { HOME, FEELINGS, LETTERS, ROUTINE, ANIMALS, STORY, PLAY, GUESS }
 
 data class ConversationReply(
     val text: String,
@@ -13,7 +13,8 @@ data class ConversationReply(
     val choices: List<String> = emptyList(),
     val waitForMovement: Boolean = false,
     val parentAlert: String? = null,
-    val playTune: Boolean = false
+    val playTune: Boolean = false,
+    val imageKey: String? = null
 )
 
 private enum class PendingTurn { NONE, FEELING_REASON, FALL_HURT, HURT_WHERE, SAFETY_HURT, SAFETY_WHERE, SCHOOL_HAPPENED, SCHOOL_KIND, SCHOOL_SAFETY, STORY_CHOICE }
@@ -29,6 +30,19 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     private var lastChildUtterance = ""
     private var letterWord = "cavalo"
     private var letterAnswer = "C"
+    private var guessIndex = 0
+
+    private data class GuessRound(val word: String, val clue: String, val options: List<String>, val imageKey: String)
+    private val guessRounds = listOf(
+        GuessRound("CAVALO", "Tenho crina, casco e faço pocotó.", listOf("CAVALO", "GATO", "CACHORRO"), "horse"),
+        GuessRound("GATO", "Tenho bigodes e faço miau.", listOf("GATO", "CACHORRO", "SAPO"), "cat"),
+        GuessRound("CACHORRO", "Eu latei: au au!", listOf("CACHORRO", "GALINHA", "PEIXE"), "dog"),
+        GuessRound("SAPO", "Eu pulo e faço croc croc.", listOf("SAPO", "URSO", "MACACO"), "frog"),
+        GuessRound("MORANGO", "Sou vermelho, docinho e tenho sementinhas.", listOf("MORANGO", "LARANJA", "COLHER"), "strawberry"),
+        GuessRound("ESCOVA", "Eu ajudo a deixar os dentes limpinhos.", listOf("ESCOVA", "COPO", "BICICLETA"), "toothbrush"),
+        GuessRound("BICICLETA", "Tenho duas rodas e pedalo para passear.", listOf("BICICLETA", "CARRO", "COLHER"), "bicycle"),
+        GuessRound("PEIXE", "Eu moro na água e nado.", listOf("PEIXE", "GALINHA", "URSO"), "fish")
+    )
 
     fun start(mode: PlayMode = PlayMode.HOME): ConversationReply {
         this.mode = mode
@@ -42,6 +56,7 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
             PlayMode.ANIMALS -> animalGame()
             PlayMode.STORY -> storyStart()
             PlayMode.PLAY -> playMenu()
+            PlayMode.GUESS -> guessStart()
         }
     }
 
@@ -92,6 +107,7 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
         return when {
             c in setOf("FELIZ", "TRISTE", "BRAVA", "MEDO", "CANSADA", "ANIMADA") -> feeling(c)
             c == "BRINCAR" -> start(PlayMode.PLAY)
+            c == "ADIVINHA" -> start(PlayMode.GUESS)
             c == "ANIMAIS" -> start(PlayMode.ANIMALS)
             c in setOf("ABC", "LETRAS") -> start(PlayMode.LETTERS)
             c == "HISTÓRIA" || c == "HISTORIA" -> start(PlayMode.STORY)
@@ -104,8 +120,11 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
             c == "CHAMAR ADULTO" -> ConversationReply("Chama um adulto em quem você confia e fica pertinho dele, tá?", RobotMood.SAD, parentAlert = "A criança tocou em CHAMAR ADULTO após uma interação de proteção.")
             c == "BANHEIRO" -> bathroomPrompt()
             c == "ÁGUA" || c == "AGUA" -> waterPrompt()
+            c == "PRÓXIMA" && mode == PlayMode.GUESS -> nextGuess()
+            c == "DE NOVO" && mode == PlayMode.GUESS -> guessStart()
             mode == PlayMode.LETTERS && c.length == 1 -> letterChoice(c)
             mode == PlayMode.ANIMALS && c in setOf("CAVALO", "GATO", "CACHORRO") -> animalChoice(c)
+            mode == PlayMode.GUESS && c in guessRounds[guessIndex].options -> guessChoice(c)
             pending == PendingTurn.STORY_CHOICE -> storyChoice(c)
             mode == PlayMode.ROUTINE -> routineChoice(c)
             else -> reply(c)
@@ -125,6 +144,7 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
         containsAny(text, "onde voce", "cade voce", "cadê voce", "onde esta a fada") -> ConversationReply("Eu estou aqui na tela, pertinho de você. Toca em mim quando quiser conversar.", RobotMood.HAPPY, choices = listOf("BRINCAR", "MÚSICA", "IMAGENS"))
         containsAny(text, "dar mel", "mel pra fada", "mel para fada", "toma mel") -> ConversationReply("Que carinho! Obrigada pelo mel. Minha luz ficou ainda mais brilhante!", RobotMood.PROUD, scene = VisualScene.HAPPY_FACE, choices = listOf("BRINCAR", "MÚSICA", "IMAGENS"))
         containsAny(text, "quero brincar", "vamos brincar", "brincar", "brinca", "jogar", "jogo") -> start(PlayMode.PLAY)
+        containsAny(text, "adivinha", "adivinhar", "quem e", "quem é") -> start(PlayMode.GUESS)
         containsAny(text, "conta uma historia", "quero historia", "historia", "historinha") -> start(PlayMode.STORY)
         containsAny(text, "quero ver animal", "animal", "animais", "cavalo", "gato", "cachorro") -> start(PlayMode.ANIMALS)
         containsAny(text, "quero aprender", "letra", "abc", "alfabeto", "aprender") -> start(PlayMode.LETTERS)
@@ -147,7 +167,7 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     private fun home() = ConversationReply(
         "Oi, ${profile.name}! Quer brincar, ver figuras, ouvir uma musiquinha ou me contar uma coisa?",
         RobotMood.HAPPY,
-        choices = listOf("BRINCAR", "IMAGENS", "MÚSICA", "ANIMAIS", "ABC", "HISTÓRIA")
+        choices = listOf("ADIVINHA", "IMAGENS", "MÚSICA", "ANIMAIS", "ABC", "HISTÓRIA")
     )
 
     private fun vocabularyBoard() = ConversationReply(
@@ -164,10 +184,35 @@ class ConversationEngine(private val profile: ChildProfile = ChildProfile.gabi()
     )
 
     private fun playMenu() = ConversationReply(
-        "Escolhe nossa brincadeira! Podemos brincar de animais, letras ou entrar numa historinha.",
+        "Escolhe uma brincadeira! Quer adivinhar figuras, animais, letras ou uma historinha?",
         RobotMood.SURPRISED,
-        choices = listOf("ANIMAIS", "ABC", "HISTÓRIA", "CARINHAS", "ROTINA", "INÍCIO")
+        choices = listOf("ADIVINHA", "ANIMAIS", "ABC", "HISTÓRIA", "CARINHAS", "INÍCIO")
     )
+
+    private fun guessStart(): ConversationReply {
+        mode = PlayMode.GUESS
+        val round = guessRounds[guessIndex]
+        return ConversationReply(
+            "Jogo de adivinha! ${round.clue} Quem é?",
+            RobotMood.CURIOUS,
+            choices = round.options,
+            imageKey = round.imageKey
+        )
+    }
+
+    private fun guessChoice(choice: String): ConversationReply {
+        val round = guessRounds[guessIndex]
+        return if (choice == round.word) {
+            ConversationReply("Acertou! É ${round.word.lowercase()}! Você foi muito bem.", RobotMood.PROUD, choices = listOf("PRÓXIMA", "DE NOVO", "INÍCIO"), imageKey = round.imageKey)
+        } else {
+            ConversationReply("Quase! Escuta a dica de novo: ${round.clue} Quem é?", RobotMood.CURIOUS, choices = round.options, imageKey = round.imageKey)
+        }
+    }
+
+    private fun nextGuess(): ConversationReply {
+        guessIndex = (guessIndex + 1) % guessRounds.size
+        return guessStart()
+    }
 
     private fun animalGame(): ConversationReply {
         mode = PlayMode.ANIMALS

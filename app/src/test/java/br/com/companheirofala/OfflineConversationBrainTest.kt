@@ -52,4 +52,13 @@ class OfflineConversationBrainTest {
 
         assertTrue(reply.parentAlert?.contains("ALERTA DE PROTEÇÃO") == true)
     }
+
+    @Test
+    fun guessGameShowsPictureAndAcceptsCorrectAnswer() {
+        val question = engine.onChoice("ADIVINHA")
+        val answer = engine.onChoice("CAVALO")
+
+        assertTrue(question.imageKey == "horse")
+        assertTrue(answer.text.contains("Acertou"))
+    }
 }

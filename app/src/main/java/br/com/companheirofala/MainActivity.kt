@@ -41,6 +41,7 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var tracker: DevelopmentTracker
     private lateinit var music: LocalMusicEngine
     private lateinit var vocabularyBoard: ImageView
+    private lateinit var guessImage: ImageView
 
     private val profile = ChildProfile.gabi()
     private val engine = ConversationEngine(profile)
@@ -137,8 +138,8 @@ class MainActivity : Activity(), SensorEventListener {
         }
 
         root.addView(TextView(this).apply {
-            text = "LUMI, SUA FADINHA ✨"
-            textSize = 15f
+            text = "✦ LUMI E GABI ✦"
+            textSize = 18f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setTypeface(typeface, Typeface.BOLD)
@@ -165,10 +166,16 @@ class MainActivity : Activity(), SensorEventListener {
             setOnClickListener { touchInteraction(); startListening() }
         }
         fairyStage.addView(vocabularyBoard, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
-        root.addView(fairyStage, LinearLayout.LayoutParams(-1, dp(292)).apply { bottomMargin = dp(8) })
+        guessImage = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "Figura do jogo de adivinha"
+            visibility = View.GONE
+        }
+        fairyStage.addView(guessImage, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+        root.addView(fairyStage, LinearLayout.LayoutParams(-1, dp(238)).apply { bottomMargin = dp(8) })
 
         visual = ChildVisualView(this).apply { visibility = View.GONE }
-        root.addView(visual, LinearLayout.LayoutParams(-1, dp(156)).apply { bottomMargin = dp(7) })
+        root.addView(visual, LinearLayout.LayoutParams(-1, dp(126)).apply { bottomMargin = dp(7) })
 
         speechBubble = TextView(this).apply {
             textSize = 18f
@@ -188,7 +195,7 @@ class MainActivity : Activity(), SensorEventListener {
             alignmentMode = GridLayout.ALIGN_BOUNDS
             setPadding(0, dp(3), 0, dp(3))
         }
-        root.addView(choices, LinearLayout.LayoutParams(-1, dp(124)))
+        root.addView(choices, LinearLayout.LayoutParams(-1, dp(148)))
 
         status = TextView(this).apply {
             text = "Toque na Lumi ou no microfone e fale"
@@ -216,9 +223,12 @@ class MainActivity : Activity(), SensorEventListener {
         setFairyMood(reply.mood)
         visual.showScene(reply.scene)
         val showVocabulary = reply.text.startsWith("Olha as figuras")
+        val showGuess = reply.imageKey != null
         vocabularyBoard.visibility = if (showVocabulary) View.VISIBLE else View.GONE
-        fairy.visibility = if (showVocabulary) View.GONE else View.VISIBLE
-        visual.visibility = if (reply.scene == VisualScene.NONE || showVocabulary) View.GONE else View.VISIBLE
+        guessImage.visibility = if (showGuess) View.VISIBLE else View.GONE
+        if (showGuess) guessImage.setImageResource(resources.getIdentifier("word_${reply.imageKey}", "drawable", packageName))
+        fairy.visibility = if (showVocabulary || showGuess) View.GONE else View.VISIBLE
+        visual.visibility = if (reply.scene == VisualScene.NONE || showVocabulary || showGuess) View.GONE else View.VISIBLE
         waitingForMovement = reply.waitForMovement
         renderChoices(reply.choices)
         reply.parentAlert?.let { events.record("parent_alert", it, "child=${profile.name}") }
@@ -236,27 +246,58 @@ class MainActivity : Activity(), SensorEventListener {
         choices.removeAllViews()
         val visible = items.take(6)
         visible.forEachIndexed { index, label ->
-            val button = Button(this).apply {
-                text = choiceSymbol(label)
-                textSize = 32f
-                isAllCaps = false
-                setTextColor(Color.WHITE)
-                setTypeface(typeface, Typeface.BOLD)
-                contentDescription = label
-                background = roundedBackground(choiceColor(label), 22f)
-                setOnClickListener {
-                    touchInteraction()
-                    tracker.recordChoice(label)
-                    events.record("choice", label)
-                    engine.onChoice(label).also { reply -> renderReply(reply); speakReply(reply) }
-                }
-            }
-            choices.addView(button, GridLayout.LayoutParams(GridLayout.spec(index / 3, 1f), GridLayout.spec(index % 3, 1f)).apply {
+            val card = choiceCard(label)
+            choices.addView(card, GridLayout.LayoutParams(GridLayout.spec(index / 3, 1f), GridLayout.spec(index % 3, 1f)).apply {
                 width = 0
-                height = if (visible.size > 3) dp(56) else dp(72)
+                height = if (visible.size > 3) dp(66) else dp(86)
                 setMargins(dp(3), dp(3), dp(3), dp(3))
             })
         }
+    }
+
+    private fun choiceCard(label: String): View {
+        val wordAsset = wordImageKey(label)
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            contentDescription = label
+            background = roundedBackground(choiceColor(label), 24f)
+            setPadding(dp(3), dp(2), dp(3), dp(2))
+            if (wordAsset != null) {
+                addView(ImageView(this@MainActivity).apply {
+                    setImageResource(resources.getIdentifier("word_$wordAsset", "drawable", packageName))
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                }, LinearLayout.LayoutParams(-1, 0, 1f))
+            } else {
+                addView(TextView(this@MainActivity).apply {
+                    text = choiceSymbol(label)
+                    textSize = 24f
+                    gravity = Gravity.CENTER
+                }, LinearLayout.LayoutParams(-1, 0, 1f))
+            }
+            addView(TextView(this@MainActivity).apply {
+                text = label
+                textSize = 10f
+                maxLines = 1
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                setTypeface(typeface, Typeface.BOLD)
+            }, LinearLayout.LayoutParams(-1, dp(17)))
+            setOnClickListener {
+                touchInteraction()
+                tracker.recordChoice(label)
+                events.record("choice", label)
+                engine.onChoice(label).also { reply -> renderReply(reply); speakReply(reply) }
+            }
+        }
+    }
+
+    private fun wordImageKey(label: String) = when (label.uppercase()) {
+        "CAVALO" -> "horse"; "GATO" -> "cat"; "CACHORRO" -> "dog"; "SAPO" -> "frog"
+        "GALINHA" -> "chicken"; "URSO" -> "bear"; "MACACO" -> "monkey"; "PEIXE" -> "fish"
+        "MORANGO" -> "strawberry"; "LARANJA" -> "orange"; "ESCOVA" -> "toothbrush"; "CARRO" -> "car"
+        "BICICLETA" -> "bicycle"; "COLEGUINHA" -> "friend"; "COPO" -> "cup"; "COLHER" -> "spoon"
+        else -> null
     }
 
     private fun handleSpoken(text: String) {
@@ -362,6 +403,7 @@ class MainActivity : Activity(), SensorEventListener {
 
     private fun choiceSymbol(label: String) = when (label) {
         "BRINCAR" -> "🎲"
+        "ADIVINHA" -> "🔎"
         "ANIMAIS" -> "🐴"
         "ABC", "LETRAS" -> "🔤"
         "HISTÓRIA", "HISTORIA" -> "📖"
