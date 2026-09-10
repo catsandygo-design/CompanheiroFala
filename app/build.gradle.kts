@@ -5,7 +5,7 @@ plugins {
 
 val gabiApiUrl = providers.gradleProperty("gabiApiUrl").orNull
     ?: System.getenv("GABI_API_URL")
-    ?: "https://companheiro-fala-dqap90kbk-siocred1.vercel.app/api/gabi/chat"
+    ?: "https://companheiro-fala-api.vercel.app/api/gabi/chat"
 val gabiApiToken = providers.gradleProperty("gabiApiToken").orNull
     ?: System.getenv("GABI_API_TOKEN")
     ?: ""

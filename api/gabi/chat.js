@@ -27,7 +27,7 @@ export default async function handler(request, response) {
 
   try {
     const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = client.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-1.5-flash" });
+    const model = client.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.5-flash" });
     const result = await model.generateContentStream(prompt);
 
     response.statusCode = 200;
