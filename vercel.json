@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/gabi/chat.js": {
+      "maxDuration": 60
+    }
+  }
+}
