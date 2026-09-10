@@ -5,7 +5,9 @@ import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -26,8 +28,20 @@ import android.widget.GridLayout
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import kotlin.math.abs
+import br.com.companheirofala.core.conversation.ConversationOrchestrator
+import br.com.companheirofala.core.ai.ModelFileManager
+import br.com.companheirofala.core.ai.LlamaCppLocalProvider
+import br.com.companheirofala.core.conversation.ConversationState
+import br.com.companheirofala.core.conversation.LLMResult
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : Activity(), SensorEventListener {
     private lateinit var fairy: ImageView
@@ -46,7 +60,14 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var memoryGrid: GridLayout
 
     private val profile = ChildProfile.gabi()
-    private lateinit var engine: ConversationEngine
+    private lateinit var orchestrator: ConversationOrchestrator
+    private lateinit var modelFiles: ModelFileManager
+    private lateinit var localLlm: LlamaCppLocalProvider
+    private var settingsModelText: TextView? = null
+    private var settingsStatusText: TextView? = null
+    private var settingsTestText: TextView? = null
+    private var lastLocalTest: LLMResult? = null
+    private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val handler = Handler(Looper.getMainLooper())
     private var waitingForMovement = false
     private var autoListenAfterSpeech = false
@@ -82,7 +103,9 @@ class MainActivity : Activity(), SensorEventListener {
         events = ParentEventRepository(this)
         tracker = DevelopmentTracker(this)
         music = LocalMusicEngine()
-        engine = ConversationEngine(profile, LocalChildMemory(this))
+        modelFiles = ModelFileManager(this)
+        localLlm = LlamaCppLocalProvider(this)
+        orchestrator = ConversationOrchestrator(this, ConversationEngine(profile, LocalChildMemory(this)), localLlm = localLlm)
 
         speech = SpeechEngine(
             context = this,
@@ -118,11 +141,13 @@ class MainActivity : Activity(), SensorEventListener {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 10)
         }
 
-        val intro = engine.start(PlayMode.HOME)
+        val intro = orchestrator.start()
         renderReply(intro)
         speakReply(intro)
         handler.postDelayed(proactivePrompt, 30_000L)
         status.postDelayed({ updater.checkAndUpdate { message -> status.text = message } }, 1400)
+        // O GGUF/JNI continua acessível em Configurações para teste offline explícito, mas não
+        // é carregado ao iniciar: a conversa principal usa o provedor remoto e não disputa RAM.
     }
 
     private fun buildScreen(): View {
@@ -140,13 +165,26 @@ class MainActivity : Activity(), SensorEventListener {
             }
         }
 
-        root.addView(TextView(this).apply {
-            text = "✦ LUMI E GABI ✦"
-            textSize = 18f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setTypeface(typeface, Typeface.BOLD)
-        }, LinearLayout.LayoutParams(-1, dp(30)))
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = "✦ LUMI E GABI ✦"
+                textSize = 18f
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER_VERTICAL
+                setTypeface(typeface, Typeface.BOLD)
+            }, LinearLayout.LayoutParams(0, dp(42), 1f))
+            addView(Button(this@MainActivity).apply {
+                text = "⚙ CONFIGURAÇÕES"
+                textSize = 12f
+                isAllCaps = false
+                setTextColor(Color.WHITE)
+                setTypeface(typeface, Typeface.BOLD)
+                background = roundedBackground(Color.rgb(96, 71, 142), 22f)
+                setOnClickListener { showParentAiSettings() }
+            }, LinearLayout.LayoutParams(dp(164), dp(40)))
+        }, LinearLayout.LayoutParams(-1, dp(44)))
 
         val fairyStage = FrameLayout(this).apply {
             background = roundedBackground(Color.argb(115, 255, 255, 255), 44f)
@@ -302,7 +340,7 @@ class MainActivity : Activity(), SensorEventListener {
                 touchInteraction()
                 tracker.recordChoice(label)
                 events.record("choice", label)
-                engine.onChoice(label).also { reply -> renderReply(reply); speakReply(reply) }
+                orchestrator.onChoice(label).also { reply -> renderReply(reply); speakReply(reply) }
             }
         }
     }
@@ -322,7 +360,7 @@ class MainActivity : Activity(), SensorEventListener {
                 } else setImageResource(android.R.drawable.ic_menu_help)
                 setOnClickListener {
                     touchInteraction()
-                    engine.onChoice("MEMORY_$index").also { reply -> renderReply(reply); speakReply(reply) }
+                    orchestrator.onChoice("MEMORY_$index").also { reply -> renderReply(reply); speakReply(reply) }
                 }
             }
             memoryGrid.addView(card, GridLayout.LayoutParams(GridLayout.spec(index / 3, 1f), GridLayout.spec(index % 3, 1f)).apply {
@@ -345,7 +383,133 @@ class MainActivity : Activity(), SensorEventListener {
         touchInteraction()
         tracker.recordSpeech(text)
         events.record("speech", text)
-        engine.reply(text).also { renderReply(it); speakReply(it) }
+        var replyDelivered = false
+        val cancelSlowResponse = Runnable {
+            localLlm.interruptGeneration()
+            if (!replyDelivered) {
+                replyDelivered = true
+                val recovery = ConversationReply(
+                    "Estou aqui com você. Pode me contar de novo com poucas palavrinhas?",
+                    RobotMood.CURIOUS,
+                    choices = listOf("CONVERSAR", "BRINCAR", "INÍCIO")
+                )
+                renderReply(recovery)
+                speakReply(recovery)
+            }
+        }
+        handler.postDelayed(cancelSlowResponse, LOCAL_RESPONSE_TIMEOUT_MS)
+        activityScope.launch {
+            try {
+                val reply = orchestrator.reply(text)
+                if (!replyDelivered) {
+                    replyDelivered = true
+                    renderReply(reply)
+                    speakReply(reply)
+                }
+            } finally {
+                handler.removeCallbacks(cancelSlowResponse)
+            }
+        }
+    }
+
+    private fun showParentAiSettings() {
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(8), dp(22), dp(8)) }
+        fun heading(value: String) = TextView(this).apply { text = value; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.rgb(72, 52, 104)); setPadding(0, dp(12), 0, dp(6)) }
+        fun body() = TextView(this).apply { textSize = 14f; setTextColor(Color.DKGRAY); setPadding(0, dp(4), 0, dp(8)) }
+        content.addView(heading("IA LOCAL"))
+        settingsModelText = body(); content.addView(settingsModelText)
+        content.addView(Button(this).apply { text = "SELECIONAR MODELO GGUF"; isAllCaps = false; setOnClickListener { openGgufPicker() } })
+        content.addView(heading("Status"))
+        settingsStatusText = body(); content.addView(settingsStatusText)
+        content.addView(Button(this).apply { text = "TESTAR IA LOCAL"; isAllCaps = false; setOnClickListener { testLocalAiDirectly() } })
+        content.addView(Button(this).apply { text = "DIAGNÓSTICO IA"; isAllCaps = false; setOnClickListener { showAiDiagnostics() } })
+        settingsTestText = body(); content.addView(settingsTestText)
+        refreshAiSettings()
+        AlertDialog.Builder(this).setTitle("CONFIGURAÇÕES DO RESPONSÁVEL")
+            .setView(ScrollView(this).apply { addView(content) })
+            .setNegativeButton("FECHAR", null).show()
+    }
+
+    private fun openGgufPicker() {
+        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/octet-stream", "application/gguf", "*/*"))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }, REQUEST_MODEL_FILE)
+    }
+
+    private fun refreshAiSettings(detail: String? = null) {
+        val file = modelFiles.selectedModel()
+        settingsModelText?.text = if (file == null) "Modelo:\n[Nenhum modelo selecionado]" else "Modelo:\n${file.name}\nTamanho: ${formatBytes(file.length())}\nCaminho interno: ${file.absolutePath}"
+        settingsStatusText?.text = detail ?: if (localLlm.isAvailable()) "MODELO CARREGADO" else "IA LOCAL NÃO CARREGADA"
+    }
+
+    private fun showAiDiagnostics() {
+        val file = modelFiles.selectedModel()
+        val test = lastLocalTest
+        val details = "STATUS JNI=${if (localLlm.isJniReady()) "CARREGADO" else "ERRO"}\nMODELO=${file?.name ?: "Nenhum"}\nCAMINHO=${file?.absolutePath ?: ""}\nTAMANHO=${formatBytes(file?.length() ?: 0)}\nMODELO CARREGADO=${if (localLlm.isAvailable()) "SIM" else "NÃO"}\nCONTEXTO CRIADO=${if (localLlm.isContextCreated()) "SIM" else "NÃO"}\nTEMPO DE CARREGAMENTO=${localLlm.lastLoadLatencyMs} ms\n\nLOCAL_MODEL_AVAILABLE=${localLlm.isAvailable()}\nLOCAL_MODEL_LOADED=${localLlm.isAvailable()}\nLOCAL_MODEL_NAME=${file?.name ?: "Nenhum"}\nMODEL_SIZE=${file?.length() ?: 0}\nMODEL_PATH=${file?.absolutePath ?: ""}\nLLM_CALLED=${test?.invoked ?: false}\nLLM_RESPONSE=${test?.text ?: ""}\nLLM_LATENCY_MS=${localLlm.lastGenerationLatencyMs}\nTOKENS GERADOS=${localLlm.lastGeneratedTokenCount}\nERROR=${test?.error ?: localLlm.lastError ?: ""}"
+        AlertDialog.Builder(this).setTitle("DIAGNÓSTICO IA").setMessage(details)
+            .setPositiveButton("Fechar", null)
+            .setNeutralButton("TESTAR IA LOCAL") { _, _ -> testLocalAiDirectly() }
+            .show()
+    }
+
+    private fun testLocalAiDirectly() {
+        val prompt = "Responda em português do Brasil, em uma frase curta: qual animal faz miau?"
+        settingsTestText?.text = "Procurando modelo..."
+        status.text = "Procurando modelo..."
+        activityScope.launch {
+            settingsTestText?.text = "Carregando IA local..."
+            val ready = withContext(Dispatchers.Default) { localLlm.loadModel() }
+            val result = if (ready) {
+                status.text = "Gerando resposta..."
+                withContext(Dispatchers.Default) { localLlm.generate(prompt, ConversationState()) }
+            } else LLMResult("", 0f, br.com.companheirofala.core.conversation.LLMProvider.LOCAL, 0, false, localLlm.lastError, false)
+            lastLocalTest = result
+            status.text = if (result.success) "Teste IA local concluído" else "Erro no teste IA local"
+            val file = modelFiles.selectedModel()
+            val message = "STATUS JNI: ${if (localLlm.isJniReady()) "CARREGADO" else "ERRO"}\nMODELO: ${file?.name ?: "Nenhum"}\nCAMINHO: ${file?.absolutePath ?: ""}\nTAMANHO: ${formatBytes(file?.length() ?: 0)}\nMODELO CARREGADO: ${if (localLlm.isAvailable()) "SIM" else "NÃO"}\nCONTEXTO CRIADO: ${if (localLlm.isContextCreated()) "SIM" else "NÃO"}\n\nPROMPT:\n$prompt\n\nRESPOSTA:\n${result.text.ifBlank { "(sem resposta)" }}\n\nTEMPO DE CARREGAMENTO:\n${localLlm.lastLoadLatencyMs} ms\n\nTEMPO DE GERAÇÃO:\n${localLlm.lastGenerationLatencyMs} ms\n\nTOKENS GERADOS:\n${localLlm.lastGeneratedTokenCount}\n\nROTA:\nLOCAL_LLM\n\nERRO:\n${result.error ?: localLlm.lastError ?: "nenhum"}"
+            settingsTestText?.text = message
+            AlertDialog.Builder(this@MainActivity).setTitle("TESTE IA LOCAL").setMessage(message).setPositiveButton("FECHAR", null).show()
+        }
+    }
+
+    private fun autoLoadSavedModel() {
+        if (modelFiles.selectedModel() == null) return
+        status.text = "Carregando IA local..."
+        activityScope.launch {
+            val ready = withContext(Dispatchers.Default) { localLlm.loadModel() }
+            val message = if (ready) "IA local carregada" else "IA local não carregou: ${localLlm.lastError ?: "erro desconhecido"}"
+            status.text = message
+            refreshAiSettings(message)
+        }
+    }
+
+    @Deprecated("Deprecated in Android API")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_MODEL_FILE || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        settingsStatusText?.text = "Importando modelo..."
+        status.text = "Importando modelo..."
+        activityScope.launch {
+            val result = withContext(Dispatchers.IO) { modelFiles.import(uri) { progress -> runOnUiThread { settingsStatusText?.text = "Importando modelo... $progress%"; status.text = "Importando modelo... $progress%" } } }
+            result.onSuccess { file ->
+                status.text = "Carregando ${file.name}..."
+                refreshAiSettings("Importado: ${file.name}. Carregando modelo...")
+                val ready = withContext(Dispatchers.Default) { localLlm.loadModel() }
+                val state = if (ready) "MODELO CARREGADO" else "ERRO AO CARREGAR\n${localLlm.lastError ?: "llama.cpp recusou o GGUF"}"
+                status.text = state
+                refreshAiSettings(state)
+            }.onFailure { error -> val state = "ERRO AO CARREGAR\n${error.message ?: "erro desconhecido"}"; status.text = state; refreshAiSettings(state) }
+        }
+    }
+
+    private fun formatBytes(bytes: Long): String = when {
+        bytes >= 1024L * 1024L * 1024L -> "%.2f GB".format(bytes.toDouble() / (1024 * 1024 * 1024))
+        bytes >= 1024L * 1024L -> "%.2f MB".format(bytes.toDouble() / (1024 * 1024))
+        else -> "$bytes bytes"
     }
 
     private fun touchInteraction() { lastInteractionAt = System.currentTimeMillis() }
@@ -407,7 +571,7 @@ class MainActivity : Activity(), SensorEventListener {
             waitingForMovement = false
             touchInteraction()
             events.record("routine", "returned_from_bathroom")
-            engine.onMovementDetected().also { renderReply(it); speakReply(it) }
+            orchestrator.onMovementDetected().also { renderReply(it); speakReply(it) }
         }
         baselineAcceleration = total
     }
@@ -496,7 +660,13 @@ class MainActivity : Activity(), SensorEventListener {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
+    private companion object {
+        const val REQUEST_MODEL_FILE = 907
+        const val LOCAL_RESPONSE_TIMEOUT_MS = 12_000L
+    }
+
     override fun onDestroy() {
+        activityScope.cancel()
         fairyIdleAnimation?.cancel()
         handler.removeCallbacks(proactivePrompt)
         sensorManager?.unregisterListener(this)

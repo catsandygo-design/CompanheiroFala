@@ -1,2 +1,9 @@
 .env.local
 local.properties
+.gradle/
+.kotlin/
+build/
+app/build/
+app/.cxx/
+hs_err_pid*.log
+replay_pid*.log
