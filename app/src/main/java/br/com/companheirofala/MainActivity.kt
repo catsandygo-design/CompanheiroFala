@@ -77,6 +77,7 @@ class MainActivity : Activity(), SensorEventListener {
     private var lastInteractionAt = System.currentTimeMillis()
     private var sensorManager: SensorManager? = null
     private var fairyIdleAnimation: AnimatorSet? = null
+    private var referenceMotion: ReferenceMotionView? = null
 
     private val proactivePrompt = object : Runnable {
         override fun run() {
@@ -167,6 +168,8 @@ class MainActivity : Activity(), SensorEventListener {
             scaleType = ImageView.ScaleType.FIT_XY
             contentDescription = "Tela inicial da Lumi"
         }, FrameLayout.LayoutParams(-1, -1))
+        referenceMotion = ReferenceMotionView(this)
+        root.addView(referenceMotion, FrameLayout.LayoutParams(-1, -1))
 
         // Views de estado do aplicativo ficam fora da composição visual inicial. Elas preservam
         // as rotas de voz, escolhas e jogos sem alterar a arte aprovada.
@@ -739,6 +742,7 @@ class MainActivity : Activity(), SensorEventListener {
     }
 
     private fun setFairyMood(mood: RobotMood) {
+        referenceMotion?.speaking = mood == RobotMood.SPEAKING
         when (mood) {
             RobotMood.LISTENING -> fairy.animate().alpha(1f).scaleX(1.025f).scaleY(1.025f).setDuration(160).start()
             RobotMood.SPEAKING -> fairy.animate().alpha(1f).scaleX(1.012f).scaleY(1.012f).setDuration(160).start()
