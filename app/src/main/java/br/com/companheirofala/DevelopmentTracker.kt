@@ -24,9 +24,9 @@ class DevelopmentTracker(context: Context) {
 
     data class XpProgress(val level: Int, val currentXp: Int, val xpForNextLevel: Int, val totalActivities: Int)
 
-    fun recordActivity(): XpProgress {
+    fun recordActivity(points: Int = 1): XpProgress {
         var level = prefs.getInt("xp_level", 1)
-        var xp = prefs.getInt("xp_current", 0) + 1
+        var xp = prefs.getInt("xp_current", 0) + points.coerceAtLeast(1)
         if (xp >= XP_PER_LEVEL) {
             level += 1
             xp = 0

@@ -6,6 +6,8 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -17,6 +19,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -74,6 +77,8 @@ class MainActivity : Activity(), SensorEventListener {
     private var autoListenAfterSpeech = false
     private var baselineAcceleration = 0f
     private var lastMovementAt = 0L
+    private var bathroomSensorArmed = false
+    private var stationarySince = 0L
     private var lastInteractionAt = System.currentTimeMillis()
     private var sensorManager: SensorManager? = null
     private var fairyIdleAnimation: AnimatorSet? = null
@@ -248,8 +253,8 @@ class MainActivity : Activity(), SensorEventListener {
         addReferenceTapArea(root, .020f, .060f, .440f, .275f, "Falar com a Lumi") {
             touchInteraction(); animateTap(microphoneGlow); startListening()
         }
-        addReferenceTapArea(root, .035f, .338f, .295f, .185f, "Água") { handleSpoken("Quero água") }
-        addReferenceTapArea(root, .350f, .338f, .295f, .185f, "Banheiro") { handleSpoken("Quero ir ao banheiro") }
+        addReferenceTapArea(root, .035f, .338f, .295f, .185f, "Água") { showWaterActivity() }
+        addReferenceTapArea(root, .350f, .338f, .295f, .185f, "Banheiro") { showBathroomActivity() }
         addReferenceTapArea(root, .665f, .338f, .295f, .185f, "Escovar os dentes") { handleSpoken("Quero escovar os dentes") }
         addReferenceTapArea(root, .035f, .525f, .295f, .185f, "Brincar") { handleSpoken("Quero brincar") }
         addReferenceTapArea(root, .350f, .525f, .295f, .185f, "Dormir") { handleSpoken("Estou com sono") }
@@ -769,9 +774,9 @@ class MainActivity : Activity(), SensorEventListener {
 
     private fun touchInteraction() { lastInteractionAt = System.currentTimeMillis() }
 
-    private fun awardActivityXp() {
+    private fun awardActivityXp(points: Int = 1) {
         val before = tracker.xpProgress()
-        val progress = tracker.recordActivity()
+        val progress = tracker.recordActivity(points)
         renderXpProgress(progress)
         if (progress.level > before.level) {
             xpLabel?.animate()?.scaleX(1.22f)?.scaleY(1.22f)?.setDuration(220)?.withEndAction {
@@ -790,6 +795,81 @@ class MainActivity : Activity(), SensorEventListener {
             xpFill?.layoutParams = FrameLayout.LayoutParams(width, -1)
             xpFill?.requestLayout()
         }
+    }
+
+    private fun say(text: String) {
+        touchInteraction()
+        status.text = text
+        voice.speak(text)
+    }
+
+    private fun showWaterActivity() {
+        val prompt = "Gabizinha, hora de tomar água! Vamos lá, vale 2 pontos. Está tomando água?"
+        say(prompt)
+        AlertDialog.Builder(this)
+            .setTitle("Hora da água 💧")
+            .setMessage("Está tomando água?")
+            .setPositiveButton("SIM") { _, _ ->
+                events.record("water", "confirmed")
+                awardActivityXp(2)
+                say("Tome mais um pouquinho para ganhar 2 pontos!")
+            }
+            .setNegativeButton("NÃO / DEPOIS") { _, _ ->
+                events.record("water", "later")
+                say("Tudo bem, Gabi. Quando quiser tomar água, toca na gotinha de novo.")
+            }
+            .show()
+    }
+
+    private fun showBathroomActivity() {
+        say("Gabi, quer ir ao banheiro? É xixi ou cocô?")
+        AlertDialog.Builder(this)
+            .setTitle("Banheiro 🚽")
+            .setMessage("O que você quer fazer?")
+            .setPositiveButton("XIXI") { _, _ -> startBathroomSensorRoutine() }
+            .setNegativeButton("COCÔ") { _, _ -> requestCaregiverHelp() }
+            .show()
+    }
+
+    private fun startBathroomSensorRoutine() {
+        waitingForMovement = true
+        bathroomSensorArmed = false
+        stationarySince = 0L
+        baselineAcceleration = 0f
+        lastMovementAt = 0L
+        events.record("bathroom", "xixi_started")
+        say("Deixe o celular em cima da mesa enquanto você vai fazer xixi!")
+    }
+
+    private fun requestCaregiverHelp() {
+        val message = "Alyce, Leticya ou Simone! A Gabi quer fazer cocô!"
+        events.record("bathroom", "coco_help_requested")
+        say(message)
+        showCaregiverNotification(message)
+        AlertDialog.Builder(this)
+            .setTitle("AJUDA DO RESPONSÁVEL")
+            .setMessage("A Gabi pediu ajuda para ir ao banheiro. Chame uma responsável.")
+            .setPositiveButton("ENTENDI", null)
+            .show()
+    }
+
+    private fun showCaregiverNotification(message: String) {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 12)
+            return
+        }
+        val manager = getSystemService(NotificationManager::class.java)
+        val channelId = "caregiver_alerts"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(NotificationChannel(channelId, "Alertas para responsáveis", NotificationManager.IMPORTANCE_HIGH))
+        }
+        val notification = android.app.Notification.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("Lumi: ajuda no banheiro")
+            .setContentText(message)
+            .setAutoCancel(true)
+            .build()
+        manager.notify(1002, notification)
     }
 
     private fun startListening() {
@@ -846,12 +926,26 @@ class MainActivity : Activity(), SensorEventListener {
         val total = abs(event.values[0]) + abs(event.values[1]) + abs(event.values[2])
         if (baselineAcceleration == 0f) baselineAcceleration = total
         val now = System.currentTimeMillis()
-        if (abs(total - baselineAcceleration) > 5.5f && now - lastMovementAt > 2500) {
+        val variation = abs(total - baselineAcceleration)
+        if (!bathroomSensorArmed) {
+            if (variation < 0.55f) {
+                if (stationarySince == 0L) stationarySince = now
+                if (now - stationarySince >= 3000L) {
+                    bathroomSensorArmed = true
+                    events.record("bathroom", "phone_left_still")
+                    status.text = "Celular parado. Esperando a Gabi voltar."
+                }
+            } else {
+                stationarySince = 0L
+            }
+        } else if (variation > 3.2f && now - lastMovementAt > 2500L) {
             lastMovementAt = now
             waitingForMovement = false
+            bathroomSensorArmed = false
             touchInteraction()
             events.record("routine", "returned_from_bathroom")
-            orchestrator.onMovementDetected().also { renderReply(it); speakReply(it) }
+            awardActivityXp(2)
+            say("Muito bem, Gabi! Você voltou do banheiro e ganhou 2 pontos!")
         }
         baselineAcceleration = total
     }

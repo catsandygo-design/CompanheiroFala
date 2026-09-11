@@ -34,8 +34,8 @@ android {
         applicationId = "br.com.companheirofala"
         minSdk = 26
         targetSdk = 36
-        versionCode = 41
-        versionName = "0.41.0-transparent-sprites"
+        versionCode = 42
+        versionName = "0.42.0-water-bathroom-routines"
         ndk { abiFilters += "arm64-v8a" }
         // Configure outside source control: -PgabiApiUrl=... -PgabiApiToken=...
         buildConfigField("String", "GABI_API_URL", gabiApiUrl.asBuildConfigString())
