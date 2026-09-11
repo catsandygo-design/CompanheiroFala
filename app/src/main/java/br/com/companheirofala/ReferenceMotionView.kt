@@ -33,20 +33,21 @@ class ReferenceMotionView(context: Context) : View(context) {
         val time = (System.currentTimeMillis() - startedAt) / 1000f
 
         // Brilhos acompanham a Lumi, sem copiar pixels da ilustração original.
-        val fairyX = width * (.255f + sin(time * 1.15f) * .014f)
-        val fairyY = height * (.205f + sin(time * 2.2f) * .005f)
+        val fairyX = width * (.405f + sin(time * 1.15f) * .016f)
+        val fairyY = height * (.145f + sin(time * 2.2f) * .006f)
         glow(canvas, fairyX - width * .13f, fairyY + height * .055f, width * .009f, Color.argb(190, 255, 245, 108))
         glow(canvas, fairyX + width * .135f, fairyY + height * .075f, width * .006f, Color.argb(175, 255, 255, 255))
         if (speaking) drawMouth(canvas, time)
 
-        // Sinais vivos ao redor dos cartões, sem encobrir desenhos ou letras.
+        // Sinais vivos ao redor dos cartões, sincronizados em ciclos diferentes
+        // para a tela nunca parecer parada nem cansativa.
         val bounce = abs(sin(time * 2.5f))
         bubble(canvas, .105f, .397f - bounce * .018f, .008f, Color.argb(150, 220, 252, 255))
         bubble(canvas, .275f, .445f - bounce * .012f, .005f, Color.argb(130, 220, 252, 255))
         sparkle(canvas, .575f, .397f, .010f, time * 80f, Color.argb(180, 255, 205, 235))
         sparkle(canvas, .887f, .405f - abs(sin(time * 3.4f)) * .010f, .009f, time * -95f, Color.argb(210, 255, 255, 255))
         musicNote(canvas, .105f, .588f + sin(time * 3.1f) * .009f, Color.argb(180, 255, 245, 125))
-        sparkle(canvas, .562f, .596f, .009f, time * 65f, Color.argb(185, 255, 245, 125))
+        drawSleepZ(canvas, time)
         heart(canvas, .880f, .590f + sin(time * 3.3f) * .008f, .010f, Color.argb(185, 255, 140, 188))
         drawActivityCelebration(canvas)
         postInvalidateOnAnimation()
@@ -72,11 +73,17 @@ class ReferenceMotionView(context: Context) : View(context) {
     }
 
     private fun drawMouth(canvas: Canvas, time: Float) {
-        val cx = width * .268f
-        val cy = height * .205f
-        val open = height * (.003f + abs(sin(time * 13f)) * .004f)
+        val cx = width * .425f
+        val cy = height * .141f
+        // Cinco fases dão três formas de boca reais: fechada, meia-aberta e aberta.
+        val phase = ((time * 6f).toInt() % 5)
+        val open = when (phase) {
+            0, 4 -> height * .0012f
+            1, 3 -> height * .0035f
+            else -> height * .0062f
+        }
         paint.color = Color.rgb(132, 49, 68)
-        canvas.drawOval(RectF(cx - width * .014f, cy - open, cx + width * .014f, cy + open), paint)
+        canvas.drawOval(RectF(cx - width * .012f, cy - open, cx + width * .012f, cy + open), paint)
     }
 
     private fun glow(canvas: Canvas, x: Float, y: Float, radius: Float, color: Int) {
@@ -120,5 +127,15 @@ class ReferenceMotionView(context: Context) : View(context) {
         canvas.drawCircle(cx, cy, size * .52f, paint)
         canvas.drawLine(cx + size * .45f, cy, cx + size * .45f, cy - size * 2.1f, paint)
         canvas.drawLine(cx + size * .45f, cy - size * 2.1f, cx + size * 1.35f, cy - size * 1.75f, paint)
+    }
+
+    private fun drawSleepZ(canvas: Canvas, time: Float) {
+        val phase = (time % 3.8f) / 3.8f
+        val alpha = if (phase < .75f) ((1f - phase / .75f) * 205).toInt() else 0
+        paint.color = Color.argb(alpha, 255, 255, 255)
+        paint.textSize = width * (.025f + phase * .012f)
+        paint.typeface = android.graphics.Typeface.DEFAULT_BOLD
+        canvas.drawText("z", width * (.545f + phase * .025f), height * (.596f - phase * .065f), paint)
+        canvas.drawText("z", width * (.575f + phase * .020f), height * (.575f - phase * .060f), paint)
     }
 }

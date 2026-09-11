@@ -82,6 +82,7 @@ class MainActivity : Activity(), SensorEventListener {
     private var levelLabel: TextView? = null
     private var xpTrack: FrameLayout? = null
     private var xpFill: View? = null
+    private var displayedXp: DevelopmentTracker.XpProgress? = null
 
     private val proactivePrompt = object : Runnable {
         override fun run() {
@@ -185,7 +186,7 @@ class MainActivity : Activity(), SensorEventListener {
             setTypeface(typeface, Typeface.BOLD)
             background = roundedBackground(Color.argb(225, 255, 255, 255), 14f)
         }
-        placeOnReference(root, levelLabel!!, .475f, .272f, .125f, .027f)
+        placeOnReference(root, levelLabel!!, .480f, .275f, .145f, .030f)
         xpLabel = TextView(this).apply {
             gravity = Gravity.CENTER
             textSize = 12f
@@ -193,14 +194,17 @@ class MainActivity : Activity(), SensorEventListener {
             setTypeface(typeface, Typeface.BOLD)
             background = roundedBackground(Color.argb(235, 255, 255, 255), 18f)
         }
-        placeOnReference(root, xpLabel!!, .705f, .275f, .170f, .037f)
+        placeOnReference(root, xpLabel!!, .700f, .278f, .155f, .036f)
         xpTrack = FrameLayout(this).apply {
             background = roundedBackground(Color.argb(125, 223, 203, 246), 12f)
             clipChildren = true
         }
         xpFill = View(this).apply { background = roundedBackground(Color.rgb(255, 181, 39), 12f) }
         xpTrack!!.addView(xpFill, FrameLayout.LayoutParams(1, -1))
-        placeOnReference(root, xpTrack!!, .510f, .305f, .180f, .012f)
+        placeOnReference(root, xpTrack!!, .505f, .304f, .195f, .014f)
+        xpTrack!!.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            displayedXp?.let(::renderXpProgress)
+        }
 
         // Views de estado do aplicativo ficam fora da composição visual inicial. Elas preservam
         // as rotas de voz, escolhas e jogos sem alterar a arte aprovada.
@@ -774,10 +778,11 @@ class MainActivity : Activity(), SensorEventListener {
     }
 
     private fun renderXpProgress(progress: DevelopmentTracker.XpProgress) {
+        displayedXp = progress
         levelLabel?.text = "Nível ${progress.level}"
         xpLabel?.text = "${progress.currentXp}/${progress.xpForNextLevel} ⭐"
         val track = xpTrack ?: return
-        track.post {
+        if (track.width > 0) {
             val width = (track.width * (progress.currentXp.toFloat() / progress.xpForNextLevel)).roundToInt()
             xpFill?.layoutParams = FrameLayout.LayoutParams(width, -1)
             xpFill?.requestLayout()
