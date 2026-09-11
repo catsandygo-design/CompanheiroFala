@@ -153,53 +153,76 @@ class MainActivity : Activity(), SensorEventListener {
     private fun buildScreen(): View {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(8), dp(10), dp(12))
+            setPadding(dp(12), dp(8), dp(12), 0)
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.rgb(47, 33, 83), Color.rgb(116, 73, 159), Color.rgb(250, 186, 202))
+                intArrayOf(Color.rgb(96, 182, 255), Color.rgb(211, 244, 255), Color.rgb(255, 247, 207))
             )
             setOnApplyWindowInsetsListener { v, insets ->
                 val bottom = insets.getInsets(WindowInsets.Type.navigationBars()).bottom
-                v.setPadding(dp(10), dp(8), dp(10), dp(12) + bottom)
+                v.setPadding(dp(12), dp(8), dp(12), bottom)
                 insets
             }
         }
 
-        root.addView(LinearLayout(this).apply {
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, dp(14))
+        }
+        content.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(TextView(this@MainActivity).apply {
                 text = "✦ LUMI E GABI ✦"
-                textSize = 18f
-                setTextColor(Color.WHITE)
+                textSize = 19f
+                setTextColor(Color.rgb(74, 47, 133))
                 gravity = Gravity.CENTER_VERTICAL
                 setTypeface(typeface, Typeface.BOLD)
             }, LinearLayout.LayoutParams(0, dp(42), 1f))
             addView(Button(this@MainActivity).apply {
-                text = "⚙ CONFIGURAÇÕES"
-                textSize = 12f
+                text = "⚙"
+                textSize = 18f
                 isAllCaps = false
                 setTextColor(Color.WHITE)
                 setTypeface(typeface, Typeface.BOLD)
-                background = roundedBackground(Color.rgb(96, 71, 142), 22f)
+                contentDescription = "Configurações do responsável"
+                background = roundedBackground(Color.rgb(131, 82, 204), 24f)
                 setOnClickListener { showParentAiSettings() }
-            }, LinearLayout.LayoutParams(dp(164), dp(40)))
+            }, LinearLayout.LayoutParams(dp(52), dp(40)))
         }, LinearLayout.LayoutParams(-1, dp(44)))
 
         val fairyStage = FrameLayout(this).apply {
-            background = roundedBackground(Color.argb(115, 255, 255, 255), 44f)
+            background = roundedBackground(Color.argb(235, 255, 255, 255), 38f)
             setPadding(dp(8), dp(8), dp(8), dp(8))
         }
         fairy = ImageView(this).apply {
             setImageResource(R.drawable.fairy_pet)
-            // FIT_CENTER preserva o corpo, asas e cauda inteiros da Lumi.
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = false
             contentDescription = "Lumi, a fadinha companheira"
             clipToOutline = false
             setOnClickListener { touchInteraction(); startListening() }
         }
-        fairyStage.addView(fairy, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+        fairyStage.addView(fairy, FrameLayout.LayoutParams(dp(185), -1, Gravity.START or Gravity.CENTER_VERTICAL))
+        fairyStage.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = roundedBackground(Color.rgb(255, 251, 255), 30f)
+            setPadding(dp(13), dp(10), dp(13), dp(10))
+            addView(TextView(this@MainActivity).apply {
+                text = "Oi, Gabi! ✨"
+                textSize = 25f
+                gravity = Gravity.CENTER
+                setTextColor(Color.rgb(104, 54, 181))
+                setTypeface(typeface, Typeface.BOLD)
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Vamos brincar e aprender?"
+                textSize = 15f
+                gravity = Gravity.CENTER
+                setTextColor(Color.rgb(103, 86, 145))
+            })
+        }, FrameLayout.LayoutParams(-1, dp(116), Gravity.END or Gravity.CENTER_VERTICAL).apply { leftMargin = dp(142); rightMargin = dp(4) })
         vocabularyBoard = ImageView(this).apply {
             setImageResource(R.drawable.vocabulary_board)
             scaleType = ImageView.ScaleType.FIT_CENTER
@@ -221,52 +244,152 @@ class MainActivity : Activity(), SensorEventListener {
             setPadding(dp(10), dp(8), dp(10), dp(8))
         }
         fairyStage.addView(memoryGrid, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
-        root.addView(fairyStage, LinearLayout.LayoutParams(-1, dp(276)).apply { bottomMargin = dp(8) })
+        content.addView(fairyStage, LinearLayout.LayoutParams(-1, dp(208)).apply { bottomMargin = dp(8) })
+
+        content.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = roundedBackground(Color.argb(235, 255, 255, 255), 28f)
+            setPadding(dp(15), dp(8), dp(15), dp(8))
+            addView(TextView(this@MainActivity).apply { text = "⭐"; textSize = 30f }, LinearLayout.LayoutParams(dp(42), dp(44)))
+            addView(TextView(this@MainActivity).apply {
+                text = "Hoje você já brilhou!\nContinue assim, Gabi!"
+                textSize = 13f
+                setTextColor(Color.rgb(85, 63, 132))
+                setTypeface(typeface, Typeface.BOLD)
+            }, LinearLayout.LayoutParams(0, dp(44), 1f))
+            addView(TextView(this@MainActivity).apply {
+                text = "3/6 ⭐"
+                textSize = 14f
+                setTextColor(Color.rgb(115, 70, 181))
+                setTypeface(typeface, Typeface.BOLD)
+            })
+        }, LinearLayout.LayoutParams(-1, dp(62)).apply { bottomMargin = dp(8) })
 
         visual = ChildVisualView(this).apply { visibility = View.GONE }
-        root.addView(visual, LinearLayout.LayoutParams(-1, dp(126)).apply { bottomMargin = dp(7) })
+        content.addView(visual, LinearLayout.LayoutParams(-1, dp(126)).apply { bottomMargin = dp(7) })
 
         speechBubble = TextView(this).apply {
-            textSize = 18f
+            textSize = 16f
             setTextColor(Color.rgb(57, 41, 67))
             gravity = Gravity.CENTER
-            minHeight = dp(80)
+            minHeight = dp(70)
             maxLines = 3
             setTypeface(typeface, Typeface.BOLD)
             setPadding(dp(14), dp(10), dp(14), dp(10))
-            background = roundedBackground(Color.rgb(255, 251, 255), 28f)
+            background = roundedBackground(Color.rgb(255, 255, 255), 26f)
         }
-        root.addView(speechBubble, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
+        content.addView(speechBubble, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
 
         choices = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(4), dp(4), dp(4), dp(4))
         }
-        root.addView(HorizontalScrollView(this).apply {
+        content.addView(HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             addView(choices)
-        }, LinearLayout.LayoutParams(-1, dp(118)))
+        }, LinearLayout.LayoutParams(-1, dp(82)))
 
         status = TextView(this).apply {
-            text = "Toque na Lumi ou no microfone e fale"
+            text = "Toque e fale com a Lumi"
             textSize = 13f
-            setTextColor(Color.WHITE)
+            setTextColor(Color.rgb(83, 63, 122))
             gravity = Gravity.CENTER
         }
-        root.addView(status, LinearLayout.LayoutParams(-1, dp(22)))
+        content.addView(status, LinearLayout.LayoutParams(-1, dp(24)))
 
-        root.addView(Button(this).apply {
-            text = "🎙  FALAR COM A LUMI  🎙"
-            textSize = 18f
-            isAllCaps = false
-            setTextColor(Color.WHITE)
-            setTypeface(typeface, Typeface.BOLD)
-            background = roundedBackground(Color.rgb(246, 113, 160), 30f)
-            setOnClickListener { touchInteraction(); startListening() }
-        }, LinearLayout.LayoutParams(-1, dp(58)))
+        val quickGrid = GridLayout(this).apply { columnCount = 3; rowCount = 2; setPadding(dp(2), dp(2), dp(2), dp(2)) }
+        listOf(
+            Triple("💧", "Água", "Quero água"), Triple("🚽", "Banheiro", "Quero ir ao banheiro"),
+            Triple("🪥", "Escovar", "Quero escovar os dentes"), Triple("🧸", "Brincar", "Quero brincar"),
+            Triple("🌙", "Dormir", "Estou com sono"), Triple("😊", "Como estou?", "Quero falar sobre como estou me sentindo")
+        ).forEachIndexed { index, item ->
+            quickGrid.addView(quickActionCard(item.first, item.second, item.third, quickCardColor(index)), GridLayout.LayoutParams(
+                GridLayout.spec(index / 3, 1f), GridLayout.spec(index % 3, 1f)
+            ).apply { width = 0; height = dp(114); setMargins(dp(4), dp(4), dp(4), dp(4)) })
+        }
+        content.addView(quickGrid, LinearLayout.LayoutParams(-1, dp(244)).apply { bottomMargin = dp(8) })
+
+        val microphone = TextView(this).apply {
+            text = "🎙"
+            textSize = 48f
+            gravity = Gravity.CENTER
+            contentDescription = "Falar com a Lumi"
+            background = roundedBackground(Color.rgb(246, 82, 145), 56f)
+            elevation = dp(8).toFloat()
+            setOnClickListener { touchInteraction(); animateTap(this); startListening() }
+        }
+        content.addView(FrameLayout(this).apply {
+            addView(microphone, FrameLayout.LayoutParams(dp(98), dp(98), Gravity.CENTER))
+            addView(TextView(this@MainActivity).apply {
+                text = "Fale com a Lumi 💗"
+                textSize = 16f
+                gravity = Gravity.CENTER
+                setTextColor(Color.rgb(96, 54, 145))
+                setTypeface(typeface, Typeface.BOLD)
+            }, FrameLayout.LayoutParams(-1, dp(28), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
+        }, LinearLayout.LayoutParams(-1, dp(132)))
+
+        root.addView(ScrollView(this).apply {
+            isFillViewport = true
+            isVerticalScrollBarEnabled = false
+            addView(content)
+        }, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        root.addView(LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            orientation = LinearLayout.HORIZONTAL
+            background = roundedBackground(Color.argb(245, 255, 255, 255), 30f)
+            listOf("⌂\nInício", "★\nConquistas", "♥\nAmigos", "⚙\nConfigurações").forEachIndexed { index, label ->
+                addView(TextView(this@MainActivity).apply {
+                    text = label
+                    textSize = 12f
+                    gravity = Gravity.CENTER
+                    setTextColor(if (index == 0) Color.rgb(124, 70, 196) else Color.rgb(109, 103, 128))
+                    setTypeface(typeface, Typeface.BOLD)
+                    setOnClickListener { if (index == 3) showParentAiSettings() else animateTap(this) }
+                }, LinearLayout.LayoutParams(0, -1, 1f))
+            }
+        }, LinearLayout.LayoutParams(-1, dp(68)))
 
         return root
+    }
+
+    private fun quickActionCard(icon: String, label: String, utterance: String, color: Int): View = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER
+        contentDescription = label
+        background = roundedBackground(color, 28f)
+        elevation = dp(5).toFloat()
+        setPadding(dp(4), dp(5), dp(4), dp(5))
+        val iconView = TextView(this@MainActivity).apply { text = icon; textSize = 36f; gravity = Gravity.CENTER }
+        addView(iconView, LinearLayout.LayoutParams(-1, 0, 1f))
+        addView(TextView(this@MainActivity).apply {
+            text = label
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+        }, LinearLayout.LayoutParams(-1, dp(28)))
+        ObjectAnimator.ofFloat(iconView, View.TRANSLATION_Y, 0f, -dp(4).toFloat(), 0f).apply {
+            duration = 1800L + (label.length * 100L)
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            start()
+        }
+        setOnClickListener { animateTap(this); handleSpoken(utterance) }
+    }
+
+    private fun quickCardColor(index: Int) = when (index) {
+        0 -> Color.rgb(70, 182, 232); 1 -> Color.rgb(125, 195, 84); 2 -> Color.rgb(244, 111, 170)
+        3 -> Color.rgb(247, 169, 59); 4 -> Color.rgb(132, 92, 211); else -> Color.rgb(55, 185, 174)
+    }
+
+    private fun animateTap(view: View) {
+        view.animate().scaleX(.93f).scaleY(.93f).setDuration(90).withEndAction {
+            view.animate().scaleX(1f).scaleY(1f).setDuration(160).start()
+        }.start()
     }
 
     private fun renderReply(reply: ConversationReply) {

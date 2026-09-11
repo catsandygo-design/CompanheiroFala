@@ -34,8 +34,8 @@ android {
         applicationId = "br.com.companheirofala"
         minSdk = 26
         targetSdk = 36
-        versionCode = 32
-        versionName = "0.32.0-remote"
+        versionCode = 33
+        versionName = "0.33.0-lumi-ui"
         ndk { abiFilters += "arm64-v8a" }
         // Configure outside source control: -PgabiApiUrl=... -PgabiApiToken=...
         buildConfigField("String", "GABI_API_URL", gabiApiUrl.asBuildConfigString())
