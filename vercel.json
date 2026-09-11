@@ -1,6 +1,4 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["gru1"],
   "functions": {
     "api/gabi/chat.js": {
       "maxDuration": 60
