@@ -13,9 +13,19 @@ import kotlin.math.sin
 class ReferenceMotionView(context: Context) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val startedAt = System.currentTimeMillis()
+    private var rewardX = .5f
+    private var rewardY = .5f
+    private var rewardStartedAt = 0L
 
     var speaking: Boolean = false
         set(value) { field = value; invalidate() }
+
+    fun celebrateAt(x: Float, y: Float) {
+        rewardX = x
+        rewardY = y
+        rewardStartedAt = System.currentTimeMillis()
+        invalidate()
+    }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -38,7 +48,27 @@ class ReferenceMotionView(context: Context) : View(context) {
         musicNote(canvas, .105f, .588f + sin(time * 3.1f) * .009f, Color.argb(180, 255, 245, 125))
         sparkle(canvas, .562f, .596f, .009f, time * 65f, Color.argb(185, 255, 245, 125))
         heart(canvas, .880f, .590f + sin(time * 3.3f) * .008f, .010f, Color.argb(185, 255, 140, 188))
+        drawActivityCelebration(canvas)
         postInvalidateOnAnimation()
+    }
+
+    private fun drawActivityCelebration(canvas: Canvas) {
+        val elapsed = System.currentTimeMillis() - rewardStartedAt
+        if (elapsed !in 0..900) return
+        val progress = elapsed / 900f
+        val cx = width * rewardX
+        val cy = height * rewardY
+        val radius = width * (.02f + progress * .12f)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = width * .006f
+        paint.color = Color.argb(((1f - progress) * 210).toInt(), 255, 226, 86)
+        canvas.drawCircle(cx, cy, radius, paint)
+        paint.style = Paint.Style.FILL
+        repeat(6) { index ->
+            val angle = Math.PI * 2 * index / 6.0
+            val distance = radius * .82f
+            sparkle(canvas, (cx + kotlin.math.cos(angle).toFloat() * distance) / width, (cy + kotlin.math.sin(angle).toFloat() * distance) / height, .009f, index * 30f + progress * 180f, Color.argb(((1f - progress) * 255).toInt(), 255, 245, 118))
+        }
     }
 
     private fun drawMouth(canvas: Canvas, time: Float) {

@@ -260,7 +260,10 @@ class MainActivity : Activity(), SensorEventListener {
             contentDescription = description
             isClickable = true
             isFocusable = true
-            setOnClickListener { onTap() }
+            setOnClickListener {
+                referenceMotion?.celebrateAt(left + width / 2f, top + height / 2f)
+                onTap()
+            }
         }
         placeOnReference(parent, area, left, top, width, height)
     }
@@ -638,6 +641,8 @@ class MainActivity : Activity(), SensorEventListener {
     private fun handleSpoken(text: String) {
         touchInteraction()
         tracker.recordSpeech(text)
+        // XP mede a participação, por isso aparece no toque/fala e não depende da rede.
+        awardActivityXp()
         events.record("speech", text)
         // A conversa principal é remota e assíncrona. O antigo watchdog de 12 segundos
         // respondia "repete" e descartava a resposta real que ainda estava chegando.
@@ -648,7 +653,6 @@ class MainActivity : Activity(), SensorEventListener {
                 val reply = orchestrator.reply(text)
                 renderReply(reply)
                 speakReply(reply)
-                awardActivityXp()
             } catch (error: Exception) {
                 status.text = "Não consegui falar com a Lumi agora. Tente de novo."
                 events.record("conversation_error", error.message ?: error.javaClass.simpleName)
