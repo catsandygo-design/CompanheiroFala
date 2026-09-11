@@ -9,13 +9,15 @@ class IntentRouter {
         has(text, "dormir", "sono", "cansada") -> IntentType.SLEEP
         has(text, "escovar", "dente", "lavar a mao", "lavar mao") -> IntentType.HYGIENE
         has(text, "triste", "feliz", "brava", "raiva", "medo", "assustada") -> IntentType.EMOTION
-        has(text, "animal", "cavalo", "gato", "cachorro", "unicórnio") -> IntentType.ANIMAL
-        has(text, "letra", "abc", "alfabeto") -> IntentType.LETTER_GAME
-        has(text, "cor", "cores") -> IntentType.COLOR_GAME
-        has(text, "historia", "historinha") -> IntentType.STORY
-        has(text, "brincar", "jogo", "adivinha", "memoria") -> IntentType.GAME
-        text.split(" ").size > 1 -> IntentType.GENERAL_CHAT
-        else -> IntentType.UNKNOWN
+        // Palavras como "cavalo", "unicórnio" ou "cor" fazem parte da conversa normal.
+        // Só ativamos o fluxo determinístico quando a criança pede claramente uma brincadeira.
+        has(text, "quero brincar", "vamos brincar", "quero jogar", "vamos jogar", "adivinha", "jogo da memoria", "jogo de memória") -> IntentType.GAME
+        has(text, "brincar de animais", "jogo de animal") -> IntentType.ANIMAL
+        has(text, "brincar com letras", "jogo das letras") -> IntentType.LETTER_GAME
+        has(text, "brincar com cores", "jogo das cores") -> IntentType.COLOR_GAME
+        has(text, "conta uma historia", "conte uma história", "quero uma historinha") -> IntentType.STORY
+        // Toda fala que não é uma rotina, jogo explícito ou situação de segurança vai ao LLM.
+        else -> IntentType.GENERAL_CHAT
     }
     private fun has(text: String, vararg terms: String) = terms.any(text::contains)
 }
