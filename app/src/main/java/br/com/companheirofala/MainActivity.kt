@@ -78,6 +78,10 @@ class MainActivity : Activity(), SensorEventListener {
     private var sensorManager: SensorManager? = null
     private var fairyIdleAnimation: AnimatorSet? = null
     private var referenceMotion: ReferenceMotionView? = null
+    private var xpLabel: TextView? = null
+    private var levelLabel: TextView? = null
+    private var xpTrack: FrameLayout? = null
+    private var xpFill: View? = null
 
     private val proactivePrompt = object : Runnable {
         override fun run() {
@@ -110,6 +114,7 @@ class MainActivity : Activity(), SensorEventListener {
         updater = AppUpdater(this)
         events = ParentEventRepository(this)
         tracker = DevelopmentTracker(this)
+        renderXpProgress(tracker.xpProgress())
         music = LocalMusicEngine()
         modelFiles = ModelFileManager(this)
         localLlm = LlamaCppLocalProvider(this)
@@ -170,6 +175,32 @@ class MainActivity : Activity(), SensorEventListener {
         }, FrameLayout.LayoutParams(-1, -1))
         referenceMotion = ReferenceMotionView(this)
         root.addView(referenceMotion, FrameLayout.LayoutParams(-1, -1))
+
+        // A arte de referência tem uma barra ilustrativa. Esta sobreposição exibe o
+        // progresso real, salvo no aparelho, sem trocar a tela aprovada.
+        levelLabel = TextView(this).apply {
+            gravity = Gravity.CENTER
+            textSize = 10f
+            setTextColor(Color.rgb(96, 61, 153))
+            setTypeface(typeface, Typeface.BOLD)
+            background = roundedBackground(Color.argb(225, 255, 255, 255), 14f)
+        }
+        placeOnReference(root, levelLabel!!, .475f, .272f, .125f, .027f)
+        xpLabel = TextView(this).apply {
+            gravity = Gravity.CENTER
+            textSize = 12f
+            setTextColor(Color.rgb(79, 54, 140))
+            setTypeface(typeface, Typeface.BOLD)
+            background = roundedBackground(Color.argb(235, 255, 255, 255), 18f)
+        }
+        placeOnReference(root, xpLabel!!, .705f, .275f, .170f, .037f)
+        xpTrack = FrameLayout(this).apply {
+            background = roundedBackground(Color.argb(125, 223, 203, 246), 12f)
+            clipChildren = true
+        }
+        xpFill = View(this).apply { background = roundedBackground(Color.rgb(255, 181, 39), 12f) }
+        xpTrack!!.addView(xpFill, FrameLayout.LayoutParams(1, -1))
+        placeOnReference(root, xpTrack!!, .510f, .305f, .180f, .012f)
 
         // Views de estado do aplicativo ficam fora da composição visual inicial. Elas preservam
         // as rotas de voz, escolhas e jogos sem alterar a arte aprovada.
@@ -564,6 +595,7 @@ class MainActivity : Activity(), SensorEventListener {
                 tracker.recordChoice(label)
                 events.record("choice", label)
                 orchestrator.onChoice(label).also { reply -> renderReply(reply); speakReply(reply) }
+                awardActivityXp()
             }
         }
     }
@@ -584,6 +616,7 @@ class MainActivity : Activity(), SensorEventListener {
                 setOnClickListener {
                     touchInteraction()
                     orchestrator.onChoice("MEMORY_$index").also { reply -> renderReply(reply); speakReply(reply) }
+                    awardActivityXp()
                 }
             }
             memoryGrid.addView(card, GridLayout.LayoutParams(GridLayout.spec(index / 3, 1f), GridLayout.spec(index % 3, 1f)).apply {
@@ -615,6 +648,7 @@ class MainActivity : Activity(), SensorEventListener {
                 val reply = orchestrator.reply(text)
                 renderReply(reply)
                 speakReply(reply)
+                awardActivityXp()
             } catch (error: Exception) {
                 status.text = "Não consegui falar com a Lumi agora. Tente de novo."
                 events.record("conversation_error", error.message ?: error.javaClass.simpleName)
@@ -723,6 +757,28 @@ class MainActivity : Activity(), SensorEventListener {
     }
 
     private fun touchInteraction() { lastInteractionAt = System.currentTimeMillis() }
+
+    private fun awardActivityXp() {
+        val before = tracker.xpProgress()
+        val progress = tracker.recordActivity()
+        renderXpProgress(progress)
+        if (progress.level > before.level) {
+            xpLabel?.animate()?.scaleX(1.22f)?.scaleY(1.22f)?.setDuration(220)?.withEndAction {
+                xpLabel?.animate()?.scaleX(1f)?.scaleY(1f)?.setDuration(220)?.start()
+            }?.start()
+        }
+    }
+
+    private fun renderXpProgress(progress: DevelopmentTracker.XpProgress) {
+        levelLabel?.text = "Nível ${progress.level}"
+        xpLabel?.text = "${progress.currentXp}/${progress.xpForNextLevel} ⭐"
+        val track = xpTrack ?: return
+        track.post {
+            val width = (track.width * (progress.currentXp.toFloat() / progress.xpForNextLevel)).roundToInt()
+            xpFill?.layoutParams = FrameLayout.LayoutParams(width, -1)
+            xpFill?.requestLayout()
+        }
+    }
 
     private fun startListening() {
         if (waitingForMovement) return
