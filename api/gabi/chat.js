@@ -28,9 +28,10 @@ export default async function handler(request, response) {
   try {
     const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     // Uma conversa de voz infantil precisa priorizar a primeira resposta, não raciocínio longo.
-    // Flash-Lite é o modelo de menor latência; GEMINI_MODEL permite trocar sem novo APK.
+    // Flash-Lite é o modelo de menor latência. Não usamos GEMINI_MODEL aqui porque uma
+    // variável antiga no Vercel pode apontar para uma versão desativada do Gemini.
     const model = client.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
+      model: "gemini-3.5-flash-lite",
       generationConfig: {
         maxOutputTokens: 60,
         temperature: 0.55,
