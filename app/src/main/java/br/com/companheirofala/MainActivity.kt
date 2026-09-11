@@ -189,22 +189,22 @@ class MainActivity : Activity(), SensorEventListener {
             setTypeface(typeface, Typeface.BOLD)
             background = roundedBackground(Color.argb(225, 255, 255, 255), 14f)
         }
-        placeOnReference(root, levelLabel!!, .480f, .275f, .145f, .030f)
+        placeOnReference(root, levelLabel!!, .515f, .277f, .090f, .024f)
         xpLabel = TextView(this).apply {
             gravity = Gravity.CENTER
-            textSize = 12f
+            textSize = 9f
             setTextColor(Color.rgb(79, 54, 140))
             setTypeface(typeface, Typeface.BOLD)
             background = roundedBackground(Color.argb(235, 255, 255, 255), 18f)
         }
-        placeOnReference(root, xpLabel!!, .700f, .278f, .155f, .036f)
+        placeOnReference(root, xpLabel!!, .718f, .280f, .105f, .025f)
         xpTrack = FrameLayout(this).apply {
             background = roundedBackground(Color.argb(125, 223, 203, 246), 12f)
             clipChildren = true
         }
         xpFill = View(this).apply { background = roundedBackground(Color.rgb(255, 181, 39), 12f) }
         xpTrack!!.addView(xpFill, FrameLayout.LayoutParams(1, -1))
-        placeOnReference(root, xpTrack!!, .505f, .304f, .195f, .014f)
+        placeOnReference(root, xpTrack!!, .505f, .304f, .175f, .010f)
         xpTrack!!.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             displayedXp?.let(::renderXpProgress)
         }
