@@ -31,6 +31,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import br.com.companheirofala.core.conversation.ConversationOrchestrator
 import br.com.companheirofala.core.ai.ModelFileManager
 import br.com.companheirofala.core.ai.LlamaCppLocalProvider
@@ -97,7 +98,13 @@ class MainActivity : Activity(), SensorEventListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(buildScreen())
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            )
+        // A tela inicial reproduz a arte aprovada; o motor de conversa continua o mesmo.
+        setContentView(buildReferenceScreen())
         startFairyIdleAnimation()
         updater = AppUpdater(this)
         events = ParentEventRepository(this)
@@ -148,6 +155,96 @@ class MainActivity : Activity(), SensorEventListener {
         status.postDelayed({ updater.checkAndUpdate { message -> status.text = message } }, 1400)
         // O GGUF/JNI continua acessível em Configurações para teste offline explícito, mas não
         // é carregado ao iniciar: a conversa principal usa o provedor remoto e não disputa RAM.
+    }
+
+    private fun buildReferenceScreen(): View {
+        val root = FrameLayout(this).apply {
+            setBackgroundColor(Color.rgb(126, 196, 255))
+            clipChildren = false
+        }
+        root.addView(ImageView(this).apply {
+            setImageResource(R.drawable.lumi_home_reference)
+            scaleType = ImageView.ScaleType.FIT_XY
+            contentDescription = "Tela inicial da Lumi"
+        }, FrameLayout.LayoutParams(-1, -1))
+
+        // Views de estado do aplicativo ficam fora da composição visual inicial. Elas preservam
+        // as rotas de voz, escolhas e jogos sem alterar a arte aprovada.
+        fairy = ImageView(this).apply {
+            setImageResource(R.drawable.fairy_pet)
+            alpha = 0f
+            contentDescription = "Lumi"
+        }
+        visual = ChildVisualView(this).apply { visibility = View.GONE }
+        speechBubble = TextView(this).apply { visibility = View.GONE }
+        choices = LinearLayout(this).apply { visibility = View.GONE }
+        vocabularyBoard = ImageView(this).apply { visibility = View.GONE }
+        guessImage = ImageView(this).apply { visibility = View.GONE }
+        memoryGrid = GridLayout(this).apply { visibility = View.GONE }
+        status = TextView(this).apply { visibility = View.GONE }
+        listOf(fairy, visual, speechBubble, choices, vocabularyBoard, guessImage, memoryGrid, status).forEach { view ->
+            root.addView(view, FrameLayout.LayoutParams(dp(1), dp(1)))
+        }
+
+        val microphoneGlow = View(this).apply {
+            background = GradientDrawable().apply {
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(4), Color.argb(165, 255, 255, 255))
+                cornerRadius = dp(70).toFloat()
+            }
+            isClickable = false
+        }
+        placeOnReference(root, microphoneGlow, .355f, .730f, .29f, .165f)
+        val pulseX = ObjectAnimator.ofFloat(microphoneGlow, View.SCALE_X, 1f, 1.08f, 1f)
+        val pulseY = ObjectAnimator.ofFloat(microphoneGlow, View.SCALE_Y, 1f, 1.08f, 1f)
+        val pulseAlpha = ObjectAnimator.ofFloat(microphoneGlow, View.ALPHA, .35f, 1f, .35f)
+        listOf(pulseX, pulseY, pulseAlpha).forEach { animator ->
+            animator.duration = 1600L
+            animator.repeatCount = ValueAnimator.INFINITE
+        }
+        AnimatorSet().apply { playTogether(pulseX, pulseY, pulseAlpha); start() }
+
+        addReferenceTapArea(root, .020f, .060f, .440f, .275f, "Falar com a Lumi") {
+            touchInteraction(); animateTap(microphoneGlow); startListening()
+        }
+        addReferenceTapArea(root, .035f, .338f, .295f, .185f, "Água") { handleSpoken("Quero água") }
+        addReferenceTapArea(root, .350f, .338f, .295f, .185f, "Banheiro") { handleSpoken("Quero ir ao banheiro") }
+        addReferenceTapArea(root, .665f, .338f, .295f, .185f, "Escovar os dentes") { handleSpoken("Quero escovar os dentes") }
+        addReferenceTapArea(root, .035f, .525f, .295f, .185f, "Brincar") { handleSpoken("Quero brincar") }
+        addReferenceTapArea(root, .350f, .525f, .295f, .185f, "Dormir") { handleSpoken("Estou com sono") }
+        addReferenceTapArea(root, .665f, .525f, .295f, .185f, "Como estou me sentindo") { handleSpoken("Quero falar sobre como estou me sentindo") }
+        addReferenceTapArea(root, .345f, .725f, .310f, .165f, "Fale com a Lumi") {
+            touchInteraction(); animateTap(microphoneGlow); startListening()
+        }
+        addReferenceTapArea(root, .785f, .000f, .205f, .075f, "Configurações do responsável") { showParentAiSettings() }
+        addReferenceTapArea(root, .755f, .905f, .240f, .095f, "Configurações") { showParentAiSettings() }
+        return root
+    }
+
+    private fun addReferenceTapArea(parent: FrameLayout, left: Float, top: Float, width: Float, height: Float, description: String, onTap: () -> Unit) {
+        val area = View(this).apply {
+            contentDescription = description
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onTap() }
+        }
+        placeOnReference(parent, area, left, top, width, height)
+    }
+
+    private fun placeOnReference(parent: FrameLayout, child: View, left: Float, top: Float, width: Float, height: Float) {
+        parent.addView(child, FrameLayout.LayoutParams(1, 1))
+        fun updatePosition() {
+            if (parent.width == 0 || parent.height == 0) return
+            child.layoutParams = FrameLayout.LayoutParams(
+                (parent.width * width).roundToInt(),
+                (parent.height * height).roundToInt()
+            ).apply {
+                leftMargin = (parent.width * left).roundToInt()
+                topMargin = (parent.height * top).roundToInt()
+            }
+        }
+        parent.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updatePosition() }
+        parent.post { updatePosition() }
     }
 
     private fun buildScreen(): View {
