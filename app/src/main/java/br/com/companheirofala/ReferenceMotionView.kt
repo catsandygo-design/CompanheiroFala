@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RectF
 import android.view.View
 import kotlin.math.abs
 import kotlin.math.sin
@@ -37,8 +36,6 @@ class ReferenceMotionView(context: Context) : View(context) {
         val fairyY = height * (.145f + sin(time * 2.2f) * .006f)
         glow(canvas, fairyX - width * .13f, fairyY + height * .055f, width * .009f, Color.argb(190, 255, 245, 108))
         glow(canvas, fairyX + width * .135f, fairyY + height * .075f, width * .006f, Color.argb(175, 255, 255, 255))
-        if (speaking) drawMouth(canvas, time)
-
         // Sinais vivos ao redor dos cartões, sincronizados em ciclos diferentes
         // para a tela nunca parecer parada nem cansativa.
         val bounce = abs(sin(time * 2.5f))
@@ -70,20 +67,6 @@ class ReferenceMotionView(context: Context) : View(context) {
             val distance = radius * .82f
             sparkle(canvas, (cx + kotlin.math.cos(angle).toFloat() * distance) / width, (cy + kotlin.math.sin(angle).toFloat() * distance) / height, .009f, index * 30f + progress * 180f, Color.argb(((1f - progress) * 255).toInt(), 255, 245, 118))
         }
-    }
-
-    private fun drawMouth(canvas: Canvas, time: Float) {
-        val cx = width * .425f
-        val cy = height * .141f
-        // Cinco fases dão três formas de boca reais: fechada, meia-aberta e aberta.
-        val phase = ((time * 6f).toInt() % 5)
-        val open = when (phase) {
-            0, 4 -> height * .0012f
-            1, 3 -> height * .0035f
-            else -> height * .0062f
-        }
-        paint.color = Color.rgb(132, 49, 68)
-        canvas.drawOval(RectF(cx - width * .012f, cy - open, cx + width * .012f, cy + open), paint)
     }
 
     private fun glow(canvas: Canvas, x: Float, y: Float, radius: Float, color: Int) {
