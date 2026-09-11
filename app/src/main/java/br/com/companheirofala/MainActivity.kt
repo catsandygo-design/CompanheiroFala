@@ -78,6 +78,7 @@ class MainActivity : Activity(), SensorEventListener {
     private var sensorManager: SensorManager? = null
     private var fairyIdleAnimation: AnimatorSet? = null
     private var referenceMotion: ReferenceMotionView? = null
+    private var animatedHome: AnimatedHomeElementsView? = null
     private var xpLabel: TextView? = null
     private var levelLabel: TextView? = null
     private var xpTrack: FrameLayout? = null
@@ -174,6 +175,8 @@ class MainActivity : Activity(), SensorEventListener {
             scaleType = ImageView.ScaleType.FIT_XY
             contentDescription = "Tela inicial da Lumi"
         }, FrameLayout.LayoutParams(-1, -1))
+        animatedHome = AnimatedHomeElementsView(this)
+        root.addView(animatedHome, FrameLayout.LayoutParams(-1, -1))
         referenceMotion = ReferenceMotionView(this)
         root.addView(referenceMotion, FrameLayout.LayoutParams(-1, -1))
 
@@ -808,6 +811,7 @@ class MainActivity : Activity(), SensorEventListener {
 
     private fun setFairyMood(mood: RobotMood) {
         referenceMotion?.speaking = mood == RobotMood.SPEAKING
+        animatedHome?.speaking = mood == RobotMood.SPEAKING
         when (mood) {
             RobotMood.LISTENING -> fairy.animate().alpha(1f).scaleX(1.025f).scaleY(1.025f).setDuration(160).start()
             RobotMood.SPEAKING -> fairy.animate().alpha(1f).scaleX(1.012f).scaleY(1.012f).setDuration(160).start()
