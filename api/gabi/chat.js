@@ -27,14 +27,24 @@ export default async function handler(request, response) {
 
   try {
     const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = client.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.6-flash" });
-    const result = await model.generateContentStream(prompt);
+    // Uma conversa de voz infantil precisa priorizar a primeira resposta, não raciocínio longo.
+    // Flash-Lite é o modelo de menor latência; GEMINI_MODEL permite trocar sem novo APK.
+    const model = client.getGenerativeModel({
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash-lite",
+      generationConfig: {
+        maxOutputTokens: 60,
+        temperature: 0.55,
+      },
+    });
 
+    // Abre o SSE antes de solicitar o modelo: o cliente confirma a conexão imediatamente.
     response.statusCode = 200;
     response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     response.setHeader("Cache-Control", "no-cache, no-transform");
     response.setHeader("Connection", "keep-alive");
     response.flushHeaders?.();
+    response.write(": connected\n\n");
+    const result = await model.generateContentStream(prompt);
 
     for await (const chunk of result.stream) {
       const text = chunk.text();
