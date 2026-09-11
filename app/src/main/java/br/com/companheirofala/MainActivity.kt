@@ -383,31 +383,18 @@ class MainActivity : Activity(), SensorEventListener {
         touchInteraction()
         tracker.recordSpeech(text)
         events.record("speech", text)
-        var replyDelivered = false
-        val cancelSlowResponse = Runnable {
-            localLlm.interruptGeneration()
-            if (!replyDelivered) {
-                replyDelivered = true
-                val recovery = ConversationReply(
-                    "Estou aqui com você. Pode me contar de novo com poucas palavrinhas?",
-                    RobotMood.CURIOUS,
-                    choices = listOf("CONVERSAR", "BRINCAR", "INÍCIO")
-                )
-                renderReply(recovery)
-                speakReply(recovery)
-            }
-        }
-        handler.postDelayed(cancelSlowResponse, LOCAL_RESPONSE_TIMEOUT_MS)
+        // A conversa principal é remota e assíncrona. O antigo watchdog de 12 segundos
+        // respondia "repete" e descartava a resposta real que ainda estava chegando.
+        // Não há inferência JNI nesta rota para cancelar.
+        status.text = "Lumi está pensando..."
         activityScope.launch {
             try {
                 val reply = orchestrator.reply(text)
-                if (!replyDelivered) {
-                    replyDelivered = true
-                    renderReply(reply)
-                    speakReply(reply)
-                }
-            } finally {
-                handler.removeCallbacks(cancelSlowResponse)
+                renderReply(reply)
+                speakReply(reply)
+            } catch (error: Exception) {
+                status.text = "Não consegui falar com a Lumi agora. Tente de novo."
+                events.record("conversation_error", error.message ?: error.javaClass.simpleName)
             }
         }
     }
@@ -662,7 +649,6 @@ class MainActivity : Activity(), SensorEventListener {
 
     private companion object {
         const val REQUEST_MODEL_FILE = 907
-        const val LOCAL_RESPONSE_TIMEOUT_MS = 12_000L
     }
 
     override fun onDestroy() {

@@ -1,6 +1,9 @@
 package br.com.companheirofala
 
 import br.com.companheirofala.core.conversation.LoopGuard
+import br.com.companheirofala.core.conversation.IntentRouter
+import br.com.companheirofala.core.conversation.IntentType
+import br.com.companheirofala.core.conversation.ConversationState
 import br.com.companheirofala.core.conversation.SpeechTextNormalizer
 import br.com.companheirofala.core.safety.ChildSafetyEngine
 import br.com.companheirofala.core.safety.SafetyCategory
@@ -28,5 +31,10 @@ class CoreConversationTest {
     @Test fun loopGuardOnlyTripsOnThirdEqualReply() {
         val guard = LoopGuard()
         assertFalse(guard.record("não entendi")); assertFalse(guard.record("não entendi")); assertTrue(guard.record("não entendi"))
+    }
+
+    @Test fun openChildConversationUsesRemoteChatRoute() {
+        assertEquals(IntentType.GENERAL_CHAT, IntentRouter().route("mamãe brigou comigo", ConversationState()))
+        assertEquals(IntentType.GENERAL_CHAT, IntentRouter().route("o cavalo parece um jacaré", ConversationState()))
     }
 }

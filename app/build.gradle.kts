@@ -60,6 +60,9 @@ android {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
+            // OneDrive marks generated .so files as reparse points, which AGP refuses to
+            // package. Keep CMake's staging files in the local system temp directory.
+            buildStagingDirectory = File(System.getProperty("java.io.tmpdir"), "companheirofala-cxx")
         }
     }
 
