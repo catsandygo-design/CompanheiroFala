@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
@@ -32,14 +33,12 @@ class AnimatedHomeElementsView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         if (width == 0 || height == 0) return
         val time = (System.currentTimeMillis() - startedAt) / 1000f
-        drawLumi(canvas, time)
         drawWaterCard(canvas, time)
         drawToiletCard(canvas, time)
         drawToothCard(canvas, time)
         drawPlayCard(canvas, time)
         drawSleepCard(canvas, time)
         drawEmotionCard(canvas, time)
-        drawBunny(canvas, time)
         postInvalidateOnAnimation()
     }
 
@@ -58,12 +57,13 @@ class AnimatedHomeElementsView(context: Context) : View(context) {
         val jump = if (phase >= 1f) 0f else sin(phase * PI).toFloat() * -.030f
         val rotation = if (phase >= 1f) 0f else phase * 360f
         val squash = if (phase < .13f || phase > .86f) .93f else 1.04f
-        sprite(canvas, 0, 0, rect(.075f, .355f + jump, .220f, .122f), rotation, 1f, squash)
+        inCard(canvas, .04f, .342f) { sprite(canvas, 0, 0, rect(.075f, .355f + jump, .220f, .122f), rotation, 1f, squash) }
     }
 
     private fun drawToiletCard(canvas: Canvas, t: Float) {
         card(canvas, .355f, .342f, GREEN, "Banheiro")
-        sprite(canvas, 1, 0, rect(.415f, .380f, .170f, .115f))
+        inCard(canvas, .355f, .342f) {
+            sprite(canvas, 1, 0, rect(.415f, .380f, .170f, .115f))
         val cycle = t % 5.2f
         val lidAngle = when {
             cycle < .45f -> -75f * (cycle / .45f)
@@ -72,45 +72,53 @@ class AnimatedHomeElementsView(context: Context) : View(context) {
             else -> 0f
         }
         // Tampa independente, com pivô junto à dobradiça inferior.
-        sprite(canvas, 2, 0, rect(.444f, .345f, .125f, .115f), rotation = lidAngle, pivotX = .50f, pivotY = .447f)
+            sprite(canvas, 2, 0, rect(.435f, .355f, .140f, .105f), rotation = lidAngle, pivotX = .505f, pivotY = .446f)
+        }
     }
 
     private fun drawToothCard(canvas: Canvas, t: Float) {
         card(canvas, .670f, .342f, PINK, "Escovar\nos dentes")
-        sprite(canvas, 0, 1, rect(.735f, .365f, .150f, .130f))
+        inCard(canvas, .670f, .342f) {
+            sprite(canvas, 0, 1, rect(.735f, .365f, .150f, .130f))
         val active = (t % 4.8f).coerceAtMost(1.55f)
         val x = if (active >= 1.55f) 0f else sin(active * 12f) * .020f
         val angle = if (active >= 1.55f) 0f else sin(active * 12f) * 12f
-        sprite(canvas, 1, 1, rect(.790f + x, .347f, .085f, .100f), rotation = angle)
+            sprite(canvas, 1, 1, rect(.785f + x, .360f, .075f, .085f), rotation = angle)
+        }
     }
 
     private fun drawPlayCard(canvas: Canvas, t: Float) {
         card(canvas, .04f, .530f, YELLOW, "Brincar")
         val active = (t % 5.6f).coerceAtMost(2.8f)
         val bearBob = if (active >= 2.8f) 0f else sin(active * 7f) * .004f
-        sprite(canvas, 2, 1, rect(.075f, .552f + bearBob, .145f, .125f))
+        inCard(canvas, .04f, .530f) {
+            sprite(canvas, 2, 1, rect(.075f, .552f + bearBob, .145f, .125f))
         val p = if (active >= 2.8f) 0f else active / 2.8f
         val ballX = .205f + sin(p * PI).toFloat() * .060f
         val ballY = .620f - sin(p * PI).toFloat() * .042f + abs(sin(p * PI * 2)).toFloat() * .016f
-        sprite(canvas, 0, 2, rect(ballX, ballY, .080f, .080f), rotation = p * 720f)
+            sprite(canvas, 0, 2, squareRect(ballX, ballY, .080f), rotation = p * 720f)
+        }
     }
 
     private fun drawSleepCard(canvas: Canvas, t: Float) {
         card(canvas, .355f, .530f, PURPLE, "Dormir")
-        val breathing = 1f + sin(t * PI / 1.1).toFloat() * .020f
-        sprite(canvas, 1, 2, rect(.395f, .565f, .220f, .105f), scale = breathing)
-        drawZ(canvas, .545f, .575f, t % 3.2f, "Z")
-        drawZ(canvas, .575f, .555f, (t + 1.05f) % 3.2f, "z")
-        drawZ(canvas, .605f, .535f, (t + 2.1f) % 3.2f, "Z")
+        inCard(canvas, .355f, .530f) {
+            val breathing = 1f + sin(t * PI / 1.1).toFloat() * .020f
+            sprite(canvas, 1, 2, rect(.395f, .565f, .220f, .105f), scale = breathing)
+            drawZ(canvas, .545f, .575f, t % 3.2f, "Z")
+            drawZ(canvas, .575f, .555f, (t + 1.05f) % 3.2f, "z")
+            drawZ(canvas, .605f, .535f, (t + 2.1f) % 3.2f, "Z")
+        }
     }
 
     private fun drawEmotionCard(canvas: Canvas, t: Float) {
         card(canvas, .670f, .530f, TEAL, "Como estou\nme sentindo")
-        val angle = t * .65f
-        // Três recortes independentes dentro da célula de carinhas.
-        emotion(canvas, 0, angle, .795f, .598f)
-        emotion(canvas, 1, angle + 2.09f, .795f, .598f)
-        emotion(canvas, 2, angle + 4.18f, .795f, .598f)
+        inCard(canvas, .670f, .530f) {
+            val angle = t * .65f
+            emotion(canvas, 0, angle, .795f, .598f)
+            emotion(canvas, 1, angle + 2.09f, .795f, .598f)
+            emotion(canvas, 2, angle + 4.18f, .795f, .598f)
+        }
     }
 
     private fun drawBunny(canvas: Canvas, t: Float) {
@@ -152,6 +160,14 @@ class AnimatedHomeElementsView(context: Context) : View(context) {
         paint.textAlign = Paint.Align.LEFT
     }
 
+    private fun inCard(canvas: Canvas, left: Float, top: Float, block: () -> Unit) {
+        val bounds = rect(left, top, .290f, .175f)
+        canvas.save()
+        canvas.clipPath(Path().apply { addRoundRect(bounds, width * .035f, width * .035f, Path.Direction.CW) })
+        block()
+        canvas.restore()
+    }
+
     private fun sprite(canvas: Canvas, col: Int, row: Int, destination: RectF, rotation: Float = 0f, scale: Float = 1f, scaleY: Float = scale, pivotX: Float? = null, pivotY: Float? = null) {
         drawSource(canvas, source(col, row), destination, rotation, scale, scaleY, pivotX, pivotY)
     }
@@ -168,6 +184,7 @@ class AnimatedHomeElementsView(context: Context) : View(context) {
 
     private fun source(col: Int, row: Int): Rect = Rect(sprites.width * col / 3, sprites.height * row / 4, sprites.width * (col + 1) / 3, sprites.height * (row + 1) / 4)
     private fun rect(x: Float, y: Float, w: Float, h: Float) = RectF(width * x, height * y, width * (x + w), height * (y + h))
+    private fun squareRect(x: Float, y: Float, sideWidthFraction: Float) = rect(x, y, sideWidthFraction, sideWidthFraction * width / height)
     private fun lighten(color: Int) = Color.rgb(min(255, Color.red(color) + 35), min(255, Color.green(color) + 35), min(255, Color.blue(color) + 35))
 
     private companion object {
