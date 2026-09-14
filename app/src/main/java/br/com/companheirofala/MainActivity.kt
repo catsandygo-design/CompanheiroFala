@@ -806,29 +806,33 @@ class MainActivity : Activity(), SensorEventListener {
     private fun showWaterActivity() {
         val prompt = "Gabizinha, hora de tomar água! Vamos lá, vale 2 pontos. Está tomando água?"
         say(prompt)
-        AlertDialog.Builder(this)
-            .setTitle("Hora da água 💧")
-            .setMessage("Está tomando água?")
-            .setPositiveButton("SIM") { _, _ ->
-                events.record("water", "confirmed")
-                awardActivityXp(2)
-                say("Tome mais um pouquinho para ganhar 2 pontos!")
-            }
-            .setNegativeButton("NÃO / DEPOIS") { _, _ ->
-                events.record("water", "later")
-                say("Tudo bem, Gabi. Quando quiser tomar água, toca na gotinha de novo.")
-            }
-            .show()
+        showPictureChoices(
+            "💧", "👍", "🕒", "Toque no joinha se está tomando água. Toque no relógio se quer depois.",
+            { events.record("water", "confirmed"); awardActivityXp(2); say("Tome mais um pouquinho para ganhar 2 pontos!") },
+            { events.record("water", "later"); say("Tudo bem, Gabi. Quando quiser tomar água, toca na gotinha de novo.") }
+        )
     }
 
     private fun showBathroomActivity() {
-        say("Gabi, quer ir ao banheiro? É xixi ou cocô?")
-        AlertDialog.Builder(this)
-            .setTitle("Banheiro 🚽")
-            .setMessage("O que você quer fazer?")
-            .setPositiveButton("XIXI") { _, _ -> startBathroomSensorRoutine() }
-            .setNegativeButton("COCÔ") { _, _ -> requestCaregiverHelp() }
-            .show()
+        say("Gabi, toque no vasinho para fazer xixi. Toque no cocô se precisa fazer cocô.")
+        showPictureChoices("🚽", "🚽", "💩", "Escolha com a figura.", { startBathroomSensorRoutine() }, { requestCaregiverHelp() })
+    }
+
+    private fun showPictureChoices(titleEmoji: String, firstEmoji: String, secondEmoji: String, description: String, onFirst: () -> Unit, onSecond: () -> Unit) {
+        val dialog = AlertDialog.Builder(this).create()
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(24), dp(18), dp(24), dp(18)) }
+        content.addView(TextView(this).apply { text = titleEmoji; textSize = 42f; gravity = Gravity.CENTER })
+        content.addView(TextView(this).apply { text = description; textSize = 16f; gravity = Gravity.CENTER; setTextColor(Color.rgb(72, 52, 104)); setPadding(0, 0, 0, dp(12)) })
+        val row = LinearLayout(this).apply { gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL }
+        fun choice(emoji: String, action: () -> Unit) = Button(this).apply {
+            text = emoji; textSize = 48f; minHeight = dp(112); isAllCaps = false
+            setOnClickListener { dialog.dismiss(); action() }
+        }
+        row.addView(choice(firstEmoji, onFirst), LinearLayout.LayoutParams(0, dp(120), 1f).apply { setMargins(dp(4), 0, dp(4), 0) })
+        row.addView(choice(secondEmoji, onSecond), LinearLayout.LayoutParams(0, dp(120), 1f).apply { setMargins(dp(4), 0, dp(4), 0) })
+        content.addView(row)
+        dialog.setView(content)
+        dialog.show()
     }
 
     private fun startBathroomSensorRoutine() {

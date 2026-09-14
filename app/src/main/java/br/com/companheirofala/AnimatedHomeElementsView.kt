@@ -39,6 +39,7 @@ class AnimatedHomeElementsView(context: Context) : View(context) {
         drawPlayCard(canvas, time)
         drawSleepCard(canvas, time)
         drawEmotionCard(canvas, time)
+        drawBunny(canvas, time)
         postInvalidateOnAnimation()
     }
 
@@ -66,10 +67,10 @@ class AnimatedHomeElementsView(context: Context) : View(context) {
             sprite(canvas, 1, 0, rect(.415f, .380f, .170f, .115f))
         val cycle = t % 5.2f
         val lidAngle = when {
-            cycle < .45f -> -75f * (cycle / .45f)
-            cycle < 1.05f -> -75f
-            cycle < 1.50f -> -75f * (1f - (cycle - 1.05f) / .45f)
-            else -> 0f
+            cycle < .45f -> -75f + 75f * (cycle / .45f)
+            cycle < 1.05f -> 0f
+            cycle < 1.50f -> -75f * ((cycle - 1.05f) / .45f)
+            else -> -75f
         }
         // Tampa independente, com pivô junto à dobradiça inferior.
             sprite(canvas, 2, 0, rect(.435f, .355f, .140f, .105f), rotation = lidAngle, pivotX = .505f, pivotY = .446f)
@@ -114,10 +115,7 @@ class AnimatedHomeElementsView(context: Context) : View(context) {
     private fun drawEmotionCard(canvas: Canvas, t: Float) {
         card(canvas, .670f, .530f, TEAL, "Como estou\nme sentindo")
         inCard(canvas, .670f, .530f) {
-            val angle = t * .65f
-            emotion(canvas, 0, angle, .795f, .598f)
-            emotion(canvas, 1, angle + 2.09f, .795f, .598f)
-            emotion(canvas, 2, angle + 4.18f, .795f, .598f)
+            sprite(canvas, 2, 2, rect(.700f, .548f, .230f, .120f))
         }
     }
 
